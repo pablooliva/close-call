@@ -36,3 +36,23 @@ Critical spec review complete (CRITICAL-SPEC-build-poc-20260411.md). All finding
 - 1 new edge case added (EDGE-010 rapid successive calls), EDGE-009 and PERF-001 clarified
 - Research disconnects reviewed: 2 resolved in spec, 3 accepted as-is (promptfoo, PII, uv)
 SPEC-001-build-poc.md updated and ready for implementation.
+
+Implementation phase started 2026-04-11. Feature: build-poc (001).
+All 12 files created:
+- requirements.txt (pipecat-ai[google,webrtc]==0.0.107 + deps)
+- .env.example (GOOGLE_API_KEY placeholder)
+- .gitignore (.env, .venv, __pycache__, .superset)
+- scenarios.py (5 German-language scenarios with opening_developer_message)
+- bot.py (Pipecat pipeline: GeminiLiveLLMService constructor API, LLMContextAggregatorPair, transcript collection, feedback generation on disconnect with idempotency guard)
+- server.py (FastAPI: GET /, GET /api/scenarios, POST /api/offer, PATCH /api/offer, GET /api/feedback/{pc_id}, feedback_store with TTL cleanup)
+- feedback.py (Gemini 2.5 Flash text coaching generation, handles empty/short transcripts, error handling)
+- static/index.html (vanilla JS, 5 UI states, WebRTC signaling, mic permission handling, feedback polling with markdown rendering)
+- Dockerfile (python:3.12-slim, single worker)
+- docker-compose.yml (single service, port 7860)
+- CLAUDE.md (project context with PROJECT.md API warning)
+- README.md (Quick Start with uv, Docker alternative, cost estimate)
+
+All REQ-001 through REQ-013, EDGE-001 through EDGE-010, FAIL-001 through FAIL-006 addressed.
+Uses verified pipecat-ai 0.0.107 API (constructor params, not Settings-based).
+PROMPT tracking: SDD/prompts/PROMPT-001-build-poc-2026-04-11.md
+Implementation phase COMPLETE. Ready for manual testing.

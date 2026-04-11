@@ -1,0 +1,5 @@
+pipecat-ai[google,webrtc]==0.0.107
+python-dotenv
+google-generativeai
+fastapi
+uvicorn[standard]

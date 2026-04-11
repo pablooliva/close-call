@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Close Call</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            color: #fff;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+
+        /* -- States -- */
+        .state { display: none; width: 100%; max-width: 700px; }
+        .state.active { display: block; }
+
+        /* -- Scenario Cards -- */
+        .scenarios { display: grid; gap: 1rem; }
+
+        .scenario-card {
+            background: #1a1d27;
+            border: 1px solid #2a2d37;
+            border-radius: 12px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: border-color 0.2s, transform 0.1s;
+        }
+
+        .scenario-card:hover {
+            border-color: #4a7cff;
+            transform: translateY(-1px);
+        }
+
+        .scenario-card.selected {
+            border-color: #4a7cff;
+            background: #1e2235;
+        }
+
+        .scenario-card h3 {
+            color: #fff;
+            font-size: 1.05rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .scenario-card .en-title {
+            color: #777;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .scenario-card p {
+            color: #aaa;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        /* -- Buttons -- */
+        .btn {
+            display: inline-block;
+            padding: 0.9rem 2rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, opacity 0.2s;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #4a7cff;
+            color: #fff;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #3a6ae8;
+        }
+
+        .btn-danger {
+            background: #e04040;
+            color: #fff;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: #c03030;
+        }
+
+        .btn-secondary {
+            background: #2a2d37;
+            color: #e0e0e0;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #3a3d47;
+        }
+
+        .btn-row {
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+
+        /* -- In-Call State -- */
+        .call-container {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+
+        .call-timer {
+            font-size: 3rem;
+            font-weight: 300;
+            color: #fff;
+            margin: 1rem 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .call-scenario-label {
+            color: #888;
+            margin-bottom: 2rem;
+        }
+
+        .pulse-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #4ae04a;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .call-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        /* -- Feedback State -- */
+        .feedback-loading {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #2a2d37;
+            border-top-color: #4a7cff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .feedback-content {
+            background: #1a1d27;
+            border: 1px solid #2a2d37;
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            text-align: left;
+            line-height: 1.7;
+        }
+
+        .feedback-content h2 {
+            color: #4a7cff;
+            font-size: 1.2rem;
+            margin-top: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .feedback-content h2:first-child {
+            margin-top: 0;
+        }
+
+        .feedback-content ul {
+            margin-left: 1.2rem;
+        }
+
+        .feedback-content li {
+            margin-bottom: 0.3rem;
+        }
+
+        .feedback-content p {
+            margin-bottom: 0.5rem;
+        }
+
+        .feedback-content strong {
+            color: #fff;
+        }
+
+        .feedback-content em {
+            color: #bbb;
+        }
+
+        /* -- Error Banner -- */
+        .error-banner {
+            background: #3a1515;
+            border: 1px solid #5a2020;
+            border-radius: 10px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            color: #ff8888;
+            display: none;
+        }
+
+        .error-banner.visible {
+            display: block;
+        }
+
+        /* -- Connecting overlay -- */
+        .connecting-text {
+            color: #888;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Close Call</h1>
+<p class="subtitle">KI-Verkaufstraining -- W&auml;hle ein Szenario und starte das Gespr&auml;ch.</p>
+
+<div id="error-banner" class="error-banner"></div>
+
+<!-- STATE: Scenario Selection -->
+<div id="state-select" class="state active">
+    <div id="scenarios" class="scenarios"></div>
+    <div class="btn-row">
+        <button id="btn-start" class="btn btn-primary" disabled>Gespr&auml;ch starten</button>
+    </div>
+</div>
+
+<!-- STATE: Connecting -->
+<div id="state-connecting" class="state">
+    <div class="call-container">
+        <div class="spinner"></div>
+        <p class="connecting-text">Verbindung wird hergestellt...</p>
+    </div>
+</div>
+
+<!-- STATE: In Call -->
+<div id="state-call" class="state">
+    <div class="call-container">
+        <div class="call-status">
+            <span class="pulse-dot"></span>
+            <span>Gespr&auml;ch l&auml;uft</span>
+        </div>
+        <div id="call-scenario-label" class="call-scenario-label"></div>
+        <div id="call-timer" class="call-timer">00:00</div>
+        <div class="btn-row">
+            <button id="btn-end" class="btn btn-danger">Gespr&auml;ch beenden</button>
+        </div>
+    </div>
+</div>
+
+<!-- STATE: Feedback Loading -->
+<div id="state-feedback-loading" class="state">
+    <div class="feedback-loading">
+        <div class="spinner"></div>
+        <p class="connecting-text">Feedback wird generiert...</p>
+    </div>
+</div>
+
+<!-- STATE: Feedback Display -->
+<div id="state-feedback" class="state">
+    <div id="feedback-content" class="feedback-content"></div>
+    <div class="btn-row">
+        <button id="btn-new" class="btn btn-secondary">Neues Szenario w&auml;hlen</button>
+    </div>
+</div>
+
+<script>
+(function() {
+    "use strict";
+
+    // --- State Management ---
+    const states = ["state-select", "state-connecting", "state-call", "state-feedback-loading", "state-feedback"];
+
+    function showState(id) {
+        states.forEach(s => {
+            document.getElementById(s).classList.toggle("active", s === id);
+        });
+    }
+
+    function showError(msg) {
+        const banner = document.getElementById("error-banner");
+        banner.textContent = msg;
+        banner.classList.add("visible");
+        setTimeout(() => banner.classList.remove("visible"), 8000);
+    }
+
+    function clearError() {
+        document.getElementById("error-banner").classList.remove("visible");
+    }
+
+    // --- Scenario Loading ---
+    let selectedScenario = null;
+    let scenarios = [];
+
+    async function loadScenarios() {
+        try {
+            const res = await fetch("/api/scenarios");
+            scenarios = await res.json();
+            renderScenarios();
+        } catch (e) {
+            showError("Szenarien konnten nicht geladen werden.");
+        }
+    }
+
+    function renderScenarios() {
+        const container = document.getElementById("scenarios");
+        container.innerHTML = "";
+        scenarios.forEach(s => {
+            const card = document.createElement("div");
+            card.className = "scenario-card";
+            card.innerHTML = `
+                <h3>${esc(s.title)}</h3>
+                <div class="en-title">${esc(s.title_en)}</div>
+                <p>${esc(s.description)}</p>
+            `;
+            card.addEventListener("click", () => selectScenario(s.id, card));
+            container.appendChild(card);
+        });
+    }
+
+    function selectScenario(id, card) {
+        selectedScenario = id;
+        document.querySelectorAll(".scenario-card").forEach(c => c.classList.remove("selected"));
+        card.classList.add("selected");
+        document.getElementById("btn-start").disabled = false;
+    }
+
+    function esc(str) {
+        const d = document.createElement("div");
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    // --- WebRTC Call ---
+    let pc = null;
+    let pcId = null;
+    let timerInterval = null;
+    let callStart = null;
+
+    async function startCall() {
+        if (!selectedScenario) return;
+        clearError();
+        showState("state-connecting");
+
+        try {
+            // EDGE-006: Request mic permission first
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            pc = new RTCPeerConnection({
+                iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+            });
+
+            // Add audio track
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            // Handle remote audio
+            const remoteAudio = new Audio();
+            remoteAudio.autoplay = true;
+            pc.ontrack = (event) => {
+                remoteAudio.srcObject = event.streams[0];
+            };
+
+            // ICE candidate trickle
+            pc.onicecandidate = async (event) => {
+                if (event.candidate) {
+                    try {
+                        await fetch("/api/offer", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                pc_id: pcId,
+                                candidate: event.candidate.toJSON(),
+                            }),
+                        });
+                    } catch (e) {
+                        console.warn("ICE trickle failed:", e);
+                    }
+                }
+            };
+
+            // FAIL-003: Monitor ICE state
+            pc.oniceconnectionstatechange = () => {
+                if (pc.iceConnectionState === "failed") {
+                    showError("Verbindung konnte nicht hergestellt werden. Bitte pr\u00fcfe deine Netzwerkverbindung.");
+                    cleanup();
+                    showState("state-select");
+                }
+            };
+
+            // Create offer
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            // Send offer to server with scenario
+            const res = await fetch("/api/offer", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sdp: offer.sdp,
+                    type: offer.type,
+                    request_data: { scenario: selectedScenario },
+                }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `Server error: ${res.status}`);
+            }
+
+            const answer = await res.json();
+            pcId = answer.pc_id;
+
+            await pc.setRemoteDescription(new RTCSessionDescription({
+                sdp: answer.sdp,
+                type: answer.type,
+            }));
+
+            // Start call UI
+            const scenarioData = scenarios.find(s => s.id === selectedScenario);
+            document.getElementById("call-scenario-label").textContent = scenarioData ? scenarioData.title : "";
+            callStart = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+            showState("state-call");
+
+        } catch (e) {
+            console.error("Call start failed:", e);
+            // EDGE-006: Handle mic permission denial
+            if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
+                showError("Mikrofonzugriff wurde verweigert. Bitte erlaube den Zugriff in den Browser-Einstellungen.");
+            } else {
+                showError("Verbindung zum KI-Service fehlgeschlagen. Bitte versuche es erneut.");
+            }
+            cleanup();
+            showState("state-select");
+        }
+    }
+
+    function updateTimer() {
+        if (!callStart) return;
+        const elapsed = Math.floor((Date.now() - callStart) / 1000);
+        const mins = String(Math.floor(elapsed / 60)).padStart(2, "0");
+        const secs = String(elapsed % 60).padStart(2, "0");
+        document.getElementById("call-timer").textContent = `${mins}:${secs}`;
+    }
+
+    function endCall() {
+        // REQ-013: Graceful disconnect
+        if (pc) {
+            pc.close();
+        }
+        cleanup();
+        showState("state-feedback-loading");
+        pollFeedback();
+    }
+
+    function cleanup() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        if (pc) {
+            // Stop all tracks
+            pc.getSenders().forEach(sender => {
+                if (sender.track) sender.track.stop();
+            });
+            pc = null;
+        }
+        callStart = null;
+    }
+
+    // --- Feedback Polling ---
+    async function pollFeedback() {
+        if (!pcId) {
+            showError("Keine Verbindungs-ID vorhanden.");
+            showState("state-select");
+            return;
+        }
+
+        const startTime = Date.now();
+        const TIMEOUT = 30000; // REQ-008: 30 second timeout
+        const INTERVAL = 2000; // REQ-008: 2 second interval
+
+        async function poll() {
+            if (Date.now() - startTime > TIMEOUT) {
+                showError("Feedback konnte nicht generiert werden. Das Gespr\u00e4ch wurde trotzdem gef\u00fchrt!");
+                showState("state-select");
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/feedback/${pcId}`);
+
+                if (res.status === 202) {
+                    // Still pending
+                    setTimeout(poll, INTERVAL);
+                    return;
+                }
+
+                if (res.status === 200) {
+                    const data = await res.json();
+                    renderFeedback(data.feedback);
+                    showState("state-feedback");
+                    return;
+                }
+
+                if (res.status === 500) {
+                    const data = await res.json().catch(() => ({}));
+                    showError(data.feedback || "Feedback konnte nicht generiert werden.");
+                    showState("state-select");
+                    return;
+                }
+
+                // 404 or other -- wait a bit (feedback might not be registered yet)
+                setTimeout(poll, INTERVAL);
+
+            } catch (e) {
+                console.warn("Feedback poll error:", e);
+                setTimeout(poll, INTERVAL);
+            }
+        }
+
+        poll();
+    }
+
+    function renderFeedback(markdown) {
+        // Simple markdown to HTML renderer
+        const html = markdown
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+            .replace(/\*(.+?)\*/g, "<em>$1</em>")
+            .replace(/^- (.+)$/gm, "<li>$1</li>")
+            .replace(/(<li>.*<\/li>)/gs, function(match) {
+                // Wrap consecutive <li> in <ul>
+                return match;
+            })
+            .replace(/((?:<li>.*<\/li>\n?)+)/gs, "<ul>$1</ul>")
+            .replace(/\n{2,}/g, "</p><p>")
+            .replace(/\n/g, "<br>");
+
+        // Wrap in paragraph tags if not already wrapped
+        const wrapped = html.startsWith("<h2>") || html.startsWith("<ul>") || html.startsWith("<p>")
+            ? html
+            : "<p>" + html + "</p>";
+
+        document.getElementById("feedback-content").innerHTML = wrapped;
+    }
+
+    // --- Event Listeners ---
+    document.getElementById("btn-start").addEventListener("click", startCall);
+    document.getElementById("btn-end").addEventListener("click", endCall);
+    document.getElementById("btn-new").addEventListener("click", () => {
+        selectedScenario = null;
+        pcId = null;
+        document.querySelectorAll(".scenario-card").forEach(c => c.classList.remove("selected"));
+        document.getElementById("btn-start").disabled = true;
+        showState("state-select");
+    });
+
+    // --- Init ---
+    loadScenarios();
+
+})();
+</script>
+
+</body>
+</html>
