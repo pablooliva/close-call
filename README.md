@@ -17,7 +17,7 @@ cp .env.example .env
 
 # 3. Install and run
 uv sync
-uv run close-call
+uv run python server.py
 # Open http://localhost:7860
 ```
 

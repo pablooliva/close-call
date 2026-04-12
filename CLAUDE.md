@@ -18,7 +18,7 @@ A PoC voice agent that lets Memodo salespeople practice German-language solar sa
 ```bash
 cp .env.example .env   # Add your GOOGLE_API_KEY
 uv sync                # Install dependencies from pyproject.toml
-uv run close-call      # Starts on http://localhost:7860
+uv run python server.py  # Starts on http://localhost:7860
 ```
 
 ## Package Management
@@ -27,8 +27,7 @@ This project uses **uv** for dependency management. Always use `uv` commands, ne
 
 - `uv sync` — Install/update all dependencies from pyproject.toml
 - `uv run <command>` — Run a command inside the project venv (no manual activation needed)
-- `uv run close-call` — Start the server via the script entry point
-- `uv run python server.py` — Alternative: run server.py directly
+- `uv run python server.py` — Start the server
 - `uv add <package>` — Add a new dependency to pyproject.toml
 - `uv lock` — Regenerate the lockfile after manual pyproject.toml edits
 

@@ -18,4 +18,4 @@ COPY . .
 
 EXPOSE 7860
 
-CMD ["uv", "run", "close-call"]
+CMD ["uv", "run", "python", "server.py"]

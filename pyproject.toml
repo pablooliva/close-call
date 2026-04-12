@@ -12,5 +12,3 @@ dependencies = [
     "uvicorn[standard]",
 ]
 
-[project.scripts]
-close-call = "server:main"
