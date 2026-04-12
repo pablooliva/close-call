@@ -149,7 +149,8 @@ async def index():
 
 # --- Entry Point ---
 
-if __name__ == "__main__":
+def main():
+    """Entry point for `uv run close-call` and `python server.py`."""
     import uvicorn
 
     port = int(os.getenv("PORT", "7860"))
@@ -160,3 +161,7 @@ if __name__ == "__main__":
         port=port,
         workers=1,  # Single worker required for feedback_store
     )
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,16 @@
+[project]
+name = "close-call"
+version = "0.1.0"
+description = "AI voice agent for practicing German-language solar sales conversations"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pipecat-ai[google,webrtc]==0.0.107",
+    "python-dotenv",
+    "google-generativeai",
+    "fastapi",
+    "uvicorn[standard]",
+]
+
+[project.scripts]
+close-call = "server:main"

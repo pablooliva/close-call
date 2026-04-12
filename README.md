@@ -15,12 +15,9 @@ cd close-call
 cp .env.example .env
 # Edit .env and add your Google AI Studio key: https://aistudio.google.com/
 
-# 3. Install dependencies
-uv venv && source .venv/bin/activate
-uv pip install -r requirements.txt
-
-# 4. Run
-python server.py
+# 3. Install and run
+uv sync
+uv run close-call
 # Open http://localhost:7860
 ```
 
@@ -60,5 +57,6 @@ docker compose up --build
 ## Requirements
 
 - Python 3.11+
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) package manager
 - A [Google AI Studio](https://aistudio.google.com/) API key (free tier sufficient)
 - A browser with microphone access
