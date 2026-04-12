@@ -402,12 +402,17 @@
             pc.onicecandidate = async (event) => {
                 if (event.candidate) {
                     try {
+                        const c = event.candidate.toJSON();
                         await fetch("/api/offer", {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                                 pc_id: pcId,
-                                candidate: event.candidate.toJSON(),
+                                candidates: [{
+                                    candidate: c.candidate,
+                                    sdp_mid: c.sdpMid,
+                                    sdp_mline_index: c.sdpMLineIndex,
+                                }],
                             }),
                         });
                     } catch (e) {
