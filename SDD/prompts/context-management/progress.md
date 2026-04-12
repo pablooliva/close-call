@@ -61,7 +61,7 @@ Key decisions carried into spec:
 - Failure scenarios: 4 (FAIL-001 to FAIL-004)
 - Risks assessed: 3 (RISK-001 to RISK-003)
 
-## Implementation Phase - READY TO START
+## Implementation Phase - COMPLETE (pending quality gate)
 
 ### Implementation Priorities
 1. Add AudioBufferProcessor to pipeline in bot.py + start_recording() in on_client_connected
@@ -84,5 +84,12 @@ Key decisions carried into spec:
 - RISK-001 (HIGH): Gemini Flash transcription quality — verify immediately; Whisper fallback is ready
 - RISK-002 (Medium): 20-40s latency — SKIP_TRANSCRIPTION=true available for dev; status field already in feedback_store
 
-### Next Steps
-Planning phase complete. Ready for /implementation-start.
+### Implementation Completed: 2026-04-13
+
+All code implemented in single session:
+- `bot.py`: AudioBufferProcessor (stereo 16kHz), on_audio_data WAV save, transcribe_audio(), start_recording() in on_client_connected, stop_recording()+transcribe+transcript_text in on_client_disconnected
+- `feedback.py`: generate_feedback() now accepts optional transcript_text param with fallback
+
+**BLOCKING quality gate remaining:** EDGE-005 — manually review 3 Gemini transcriptions for German accuracy ≥85%. If below threshold, switch to local Whisper (see SPEC-002 § Implementation Notes).
+
+PROMPT document: `SDD/prompts/PROMPT-002-user-speech-transcription-2026-04-13.md`
