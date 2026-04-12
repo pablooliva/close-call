@@ -62,29 +62,40 @@ def count_turns(messages: list[dict]) -> int:
     )
 
 
-async def generate_feedback(scenario: dict, messages: list[dict]) -> str:
+async def generate_feedback(
+    scenario: dict,
+    messages: list[dict],
+    transcript_text: str = "",
+) -> str:
     """Generate coaching feedback from a conversation transcript.
 
     Args:
         scenario: The scenario dict (must have 'description' key).
         messages: OpenAI-format message list from context.get_messages().
+        transcript_text: Optional pre-transcribed dialogue text (REQ-004).
+            When non-empty, used in place of format_transcript(messages).
+            Falls back to messages-based transcript when empty (REQ-005).
 
     Returns:
         Markdown-formatted coaching feedback string, or a short message
         if the transcript is too short/empty.
     """
-    # EDGE-007 / FAIL-005: Handle empty or very short transcripts
-    turns = count_turns(messages)
-    if turns == 0:
-        return SHORT_TRANSCRIPT_MESSAGE
+    # REQ-004: Use transcript_text when provided; fall back to messages-based path (REQ-005)
+    if transcript_text:
+        transcript = transcript_text
+    else:
+        # EDGE-007 / FAIL-005: Handle empty or very short transcripts
+        turns = count_turns(messages)
+        if turns == 0:
+            return SHORT_TRANSCRIPT_MESSAGE
 
-    transcript = format_transcript(messages)
-    if not transcript.strip():
-        return SHORT_TRANSCRIPT_MESSAGE
+        transcript = format_transcript(messages)
+        if not transcript.strip():
+            return SHORT_TRANSCRIPT_MESSAGE
 
-    if turns < 3:
-        # Very short transcript -- still try to generate but note it
-        transcript += "\n\n(Hinweis: Sehr kurzes Gespr\u00e4ch)"
+        if turns < 3:
+            # Very short transcript -- still try to generate but note it
+            transcript += "\n\n(Hinweis: Sehr kurzes Gespr\u00e4ch)"
 
     try:
         genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))

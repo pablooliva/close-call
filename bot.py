@@ -5,12 +5,15 @@ transcript collection via LLMContextAggregatorPair, and feedback generation
 on client disconnect.
 """
 
+import asyncio
 import logging
 import os
 import time
+import wave
 from datetime import datetime
 from pathlib import Path
 
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 from pipecat.frames.frames import (
@@ -20,6 +23,7 @@ from pipecat.frames.frames import (
     TTSTextFrame,
     TranscriptionFrame,
 )
+from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -127,6 +131,80 @@ class DialogueLogger(FrameProcessor):
         await super().cleanup()
 
 
+def _interleave_transcript(user_transcript: str, messages: list[dict]) -> str:
+    """Interleave user audio transcript lines with bot context messages.
+
+    The bot always speaks first in this app, so the natural order is:
+    Kunde[0], Verkäufer[0], Kunde[1], Verkäufer[1], ...
+    If turns are uneven the remaining lines are appended at the end.
+    """
+    user_lines = [l.strip() for l in user_transcript.strip().splitlines() if l.strip()]
+    bot_lines = [
+        f"Kunde: {m['content']}"
+        for m in messages
+        if m.get("role") == "assistant" and m.get("content")
+    ]
+    result = []
+    for i in range(max(len(user_lines), len(bot_lines))):
+        if i < len(bot_lines):
+            result.append(bot_lines[i])
+        if i < len(user_lines):
+            result.append(user_lines[i])
+    return "\n".join(result)
+
+
+async def transcribe_audio(wav_path: Path, dialogue_log: logging.Logger) -> str:
+    """Transcribe WAV file using Gemini Flash. Returns transcript text or '' on failure.
+
+    Uploads to Gemini Files API, transcribes, then deletes the uploaded file (REQ-010).
+    Skipped entirely if SKIP_TRANSCRIPTION=true env var is set (MAINT-002).
+    """
+    if os.getenv("SKIP_TRANSCRIPTION", "").lower() == "true":
+        logger.info("SKIP_TRANSCRIPTION set — skipping transcription")
+        return ""
+
+    audio_file = None
+    try:
+        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+        audio_file = await asyncio.to_thread(
+            genai.upload_file, str(wav_path), mime_type="audio/wav"
+        )
+        logger.info("Uploaded WAV to Gemini Files API: %s", audio_file.name)
+        # Files API processes uploads asynchronously; wait for ACTIVE state before generating
+        for _ in range(30):
+            if audio_file.state.name != "PROCESSING":
+                break
+            await asyncio.sleep(0.5)
+            audio_file = await asyncio.to_thread(genai.get_file, audio_file.name)
+        else:
+            raise RuntimeError("Gemini file still PROCESSING after 15s — giving up")
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = await model.generate_content_async([
+            "Transkribiere diese Audioaufnahme. "
+            "Dies ist ausschließlich die Stimme des Verkäufers (Memodo-Vertrieb) — "
+            "keine anderen Sprecher sind enthalten. "
+            "Stelle jeder Aussage 'Verkäufer: ' voran. "
+            "Nur der transkribierte Text, keine Erklärungen.",
+            audio_file,
+        ])
+        transcript = response.text
+        # REQ-011: Log transcript to session file
+        dialogue_log.info("[TRANSCRIPT]\n%s", transcript)
+        logger.info("Transcription complete (%d chars)", len(transcript))
+        return transcript
+    except Exception as e:
+        logger.warning("Transcription failed: %s", e)
+        return ""
+    finally:
+        # REQ-010: Delete uploaded audio from Gemini's servers
+        if audio_file is not None:
+            try:
+                await asyncio.to_thread(genai.delete_file, audio_file.name)
+                logger.info("Deleted uploaded audio from Gemini Files API")
+            except Exception as e:
+                logger.warning("Failed to delete Gemini file: %s", e)
+
+
 async def run_bot(
     connection: SmallWebRTCConnection,
     scenario_id: str,
@@ -176,11 +254,62 @@ async def run_bot(
     user_log = DialogueLogger(session_logger=dialogue_log)
     bot_log = DialogueLogger(session_logger=dialogue_log)
 
+    # REQ-001/REQ-006: Capture audio at 16kHz; on_track_audio_data gives us clean
+    # separate user/bot buffers so no diarization is needed for transcription.
+    audio_buffer = AudioBufferProcessor(
+        sample_rate=16000,
+        num_channels=2,       # Required for on_track_audio_data to populate both buffers
+        buffer_size=0,        # Only flush on stop_recording()
+        enable_turn_audio=False,
+    )
+
+    # Closure dict: shares WAV path between on_track_audio_data and disconnect handler.
+    # wav_ready signals when the handler has finished (stop_recording() does not
+    # await the handler before returning, so we need explicit coordination).
+    wav_path_holder = {"path": None}  # user-only WAV path, used for transcription
+    wav_ready = asyncio.Event()
+
+    @audio_buffer.event_handler("on_audio_data")
+    async def on_audio_data(processor, audio, sample_rate, num_channels):
+        # Save full stereo WAV (both sides) as the permanent conversation record
+        wav_path = transcript_path.with_suffix(".wav")
+        def _write():
+            with wave.open(str(wav_path), "wb") as wf:
+                wf.setnchannels(num_channels)
+                wf.setsampwidth(2)
+                wf.setframerate(sample_rate)
+                wf.writeframes(audio)
+        try:
+            await asyncio.to_thread(_write)
+            logger.info("Stereo WAV saved to %s", wav_path)
+        except Exception as e:
+            logger.error("Failed to save stereo WAV: %s", e)
+
+    @audio_buffer.event_handler("on_track_audio_data")
+    async def on_track_audio_data(processor, user_audio, bot_audio, sample_rate, num_channels):
+        # Save user-only mono WAV for transcription (no diarization needed)
+        user_wav_path = transcript_path.with_suffix(".user.wav")
+        def _write():
+            with wave.open(str(user_wav_path), "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(sample_rate)
+                wf.writeframes(user_audio)
+        try:
+            await asyncio.to_thread(_write)
+            wav_path_holder["path"] = user_wav_path
+            logger.info("User WAV saved to %s", user_wav_path)
+        except Exception as e:
+            logger.error("Failed to save user WAV: %s", e)
+        finally:
+            wav_ready.set()  # on_track_audio_data fires after on_audio_data — both are done
+
     pipeline = Pipeline([
         transport.input(),
         user_log,
         user_aggregator,
         llm,
+        audio_buffer,   # REQ-001: captures both user + bot audio after LLM passthrough
         bot_log,
         transport.output(),
         assistant_aggregator,
@@ -200,6 +329,7 @@ async def run_bot(
     # Without it, Gemini generates text transcription but drops audio bytes partway through.
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
+        await audio_buffer.start_recording()  # REQ-009: explicit start required (_recording=False at init)
         context.add_message({
             "role": "user",
             "content": scenario["opening_prompt"],
@@ -223,8 +353,27 @@ async def run_bot(
         }
 
         try:
+            await audio_buffer.stop_recording()  # triggers on_audio_data (fired async — does not block here)
+            try:
+                await asyncio.wait_for(wav_ready.wait(), timeout=30.0)  # wait for WAV write to finish
+            except asyncio.TimeoutError:
+                logger.warning("Timed out waiting for WAV file — skipping transcription")
+            wav_path = wav_path_holder["path"]
+            transcript_text = ""
+            if wav_path and wav_path.exists():
+                transcript_text = await transcribe_audio(wav_path, dialogue_log)  # REQ-003
+
             messages = context.get_messages()
-            feedback = await generate_feedback(scenario, messages)
+
+            # Build interleaved transcript: bot speaks first, then alternates
+            combined_transcript = _interleave_transcript(transcript_text, messages) if transcript_text else ""
+
+            if combined_transcript:
+                transcript_file = transcript_path.with_suffix(".transcript.txt")
+                transcript_file.write_text(combined_transcript, encoding="utf-8")
+                logger.info("Transcript saved to %s", transcript_file)
+
+            feedback = await generate_feedback(scenario, messages, transcript_text=combined_transcript)
             feedback_store[pc_id] = {
                 "status": "ready",
                 "feedback": feedback,
@@ -244,7 +393,7 @@ async def run_bot(
                 "created_at": time.time(),
             }
 
-        await task.cancel()
+        await task.cancel()  # REQ-008: LAST — after stop_recording() and all async work
 
     runner = PipelineRunner(handle_sigint=False)
     await runner.run(task)

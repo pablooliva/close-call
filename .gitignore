@@ -5,3 +5,4 @@ __pycache__/
 .superset/
 transcripts/
 Close Call.url
+.DS_Store
