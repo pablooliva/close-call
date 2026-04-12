@@ -56,9 +56,10 @@ PROJECT.md (written 2026-04-04) contains code snippets that use the WRONG API su
 
 - Import from `pipecat.transports.smallwebrtc.*` (NOT the deprecated `pipecat.transports.network.small_webrtc`)
 - Use `SmallWebRTCRequestHandler` for signaling (mirrors Pipecat's built-in runner)
-- `"developer"` role for mid-conversation context injection (not `"system"`)
+- Use `send_client_content` with `role='user'` for initial bot greeting trigger (required for reliable audio output from Gemini native audio). Scene context goes in the `system_instruction` as a `SZENE:` block; the `opening_prompt` is a short trigger sent via `send_client_content`.
+- **Do NOT create a data channel** from the frontend (`createDataChannel`) — it changes the SDP negotiation and breaks audio output. The SmallWebRTC transport handles data channel warnings gracefully without one.
 - `LLMContextAggregatorPair` captures both user and assistant speech as text
-- Gemini Live produces transcripts by default (`AudioTranscriptionConfig` enabled)
+- Gemini Live produces transcripts by default (`AudioTranscriptionConfig` enabled), but user input transcription is unreliable with the native audio preview model (see `SDD/research/RESEARCH-002-user-speech-transcription.md`)
 
 ## Known Constraints
 

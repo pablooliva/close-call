@@ -279,6 +279,7 @@
             <span>Gespr&auml;ch l&auml;uft</span>
         </div>
         <div id="call-scenario-label" class="call-scenario-label"></div>
+        <div id="call-hint" class="call-hint" style="color:#888; font-size:0.9em; margin:0.5em 0;">Starte das Gespr&auml;ch &mdash; du bist der Verk&auml;ufer.</div>
         <div id="call-timer" class="call-timer">00:00</div>
         <div class="btn-row">
             <button id="btn-end" class="btn btn-danger">Gespr&auml;ch beenden</button>
@@ -382,7 +383,13 @@
 
         try {
             // EDGE-006: Request mic permission first
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                },
+            });
 
             pc = new RTCPeerConnection({
                 iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -398,22 +405,25 @@
                 remoteAudio.srcObject = event.streams[0];
             };
 
-            // ICE candidate trickle
+            // ICE candidate trickle — queue until pcId is available
+            const pendingCandidates = [];
             pc.onicecandidate = async (event) => {
                 if (event.candidate) {
+                    const c = event.candidate.toJSON();
+                    const entry = {
+                        candidate: c.candidate,
+                        sdp_mid: c.sdpMid,
+                        sdp_mline_index: c.sdpMLineIndex,
+                    };
+                    if (!pcId) {
+                        pendingCandidates.push(entry);
+                        return;
+                    }
                     try {
-                        const c = event.candidate.toJSON();
                         await fetch("/api/offer", {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                                pc_id: pcId,
-                                candidates: [{
-                                    candidate: c.candidate,
-                                    sdp_mid: c.sdpMid,
-                                    sdp_mline_index: c.sdpMLineIndex,
-                                }],
-                            }),
+                            body: JSON.stringify({ pc_id: pcId, candidates: [entry] }),
                         });
                     } catch (e) {
                         console.warn("ICE trickle failed:", e);
@@ -452,6 +462,20 @@
 
             const answer = await res.json();
             pcId = answer.pc_id;
+
+            // Flush any ICE candidates that arrived before we had pcId
+            for (const entry of pendingCandidates) {
+                try {
+                    await fetch("/api/offer", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ pc_id: pcId, candidates: [entry] }),
+                    });
+                } catch (e) {
+                    console.warn("ICE trickle (queued) failed:", e);
+                }
+            }
+            pendingCandidates.length = 0;
 
             await pc.setRemoteDescription(new RTCSessionDescription({
                 sdp: answer.sdp,
@@ -531,7 +555,7 @@
             }
 
             try {
-                const res = await fetch(`/api/feedback/${pcId}`);
+                const res = await fetch(`/api/feedback/${encodeURIComponent(pcId)}`);
 
                 if (res.status === 202) {
                     // Still pending

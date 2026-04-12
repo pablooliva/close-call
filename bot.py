@@ -8,16 +8,28 @@ on client disconnect.
 import logging
 import os
 import time
+from datetime import datetime
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-from pipecat.frames.frames import LLMRunFrame
+from pipecat.frames.frames import (
+    InputAudioRawFrame,
+    LLMRunFrame,
+    TTSAudioRawFrame,
+    TTSTextFrame,
+    TranscriptionFrame,
+)
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair
-from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService, InputParams
+from pipecat.processors.frame_processor import FrameProcessor
+from pipecat.services.google.gemini_live.llm import (
+    GeminiLiveLLMService,
+    InputParams,
+)
 from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
@@ -29,6 +41,90 @@ from scenarios import SCENARIOS
 load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
+
+TRANSCRIPTS_DIR = Path(__file__).parent / "transcripts"
+
+
+def _create_session_logger(scenario_id: str) -> tuple[logging.Logger, Path]:
+    """Create a per-session file logger that writes to transcripts/<timestamp>_<scenario>.log."""
+    TRANSCRIPTS_DIR.mkdir(exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"{timestamp}_{scenario_id}.log"
+    filepath = TRANSCRIPTS_DIR / filename
+
+    session_logger = logging.getLogger(f"dialogue.{timestamp}")
+    session_logger.setLevel(logging.INFO)
+    session_logger.propagate = False  # Don't duplicate to root/stdout
+
+    handler = logging.FileHandler(filepath, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s  %(message)s", datefmt="%H:%M:%S"))
+    session_logger.addHandler(handler)
+
+    return session_logger, filepath
+
+
+class DialogueLogger(FrameProcessor):
+    """Logs the full dialogue: user transcriptions, bot output text, and audio stats.
+
+    Place one instance before the LLM (catches user transcriptions flowing upstream
+    and audio frames flowing downstream) and one after the LLM (catches bot
+    TTSTextFrames flowing downstream).
+    """
+
+    def __init__(self, session_logger: logging.Logger, **kwargs):
+        super().__init__(**kwargs)
+        self._log = session_logger
+        self._audio_in_count = 0
+        self._audio_out_count = 0
+        self._audio_out_bytes = 0
+        self._bot_text_buffer = ""
+
+    async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, TranscriptionFrame):
+            self._log.info("[USER] %s", frame.text)
+        elif isinstance(frame, TTSTextFrame):
+            # Bot output arrives as incremental text chunks — buffer into sentences
+            self._bot_text_buffer += frame.text
+            for sep in (".", "!", "?", "\n"):
+                if sep in self._bot_text_buffer:
+                    parts = self._bot_text_buffer.rsplit(sep, 1)
+                    self._log.info("[BOT]  %s%s", parts[0], sep)
+                    self._bot_text_buffer = parts[1] if len(parts) > 1 else ""
+                    break
+        elif isinstance(frame, TTSAudioRawFrame):
+            self._audio_out_count += 1
+            self._audio_out_bytes += len(frame.audio)
+            if self._audio_out_count % 100 == 1:
+                self._log.info(
+                    "[AUDIO_OUT] %d frames, %d bytes total (sample_rate=%d)",
+                    self._audio_out_count,
+                    self._audio_out_bytes,
+                    frame.sample_rate,
+                )
+        elif isinstance(frame, InputAudioRawFrame):
+            self._audio_in_count += 1
+            if self._audio_in_count % 500 == 1:
+                self._log.info(
+                    "[AUDIO_IN] %d frames (sample_rate=%d, channels=%d)",
+                    self._audio_in_count,
+                    frame.sample_rate,
+                    frame.num_channels,
+                )
+
+        await self.push_frame(frame, direction)
+
+    async def cleanup(self):
+        if self._bot_text_buffer.strip():
+            self._log.info("[BOT]  %s", self._bot_text_buffer.strip())
+        self._log.info(
+            "[SUMMARY] audio_in=%d frames, audio_out=%d frames (%d bytes)",
+            self._audio_in_count,
+            self._audio_out_count,
+            self._audio_out_bytes,
+        )
+        await super().cleanup()
 
 
 async def run_bot(
@@ -45,6 +141,14 @@ async def run_bot(
     """
     scenario = SCENARIOS[scenario_id]
     pc_id = connection.pc_id
+
+    # Per-session dialogue transcript
+    dialogue_log, transcript_path = _create_session_logger(scenario_id)
+    dialogue_log.info("=== Close Call Session ===")
+    dialogue_log.info("Scenario: %s (%s)", scenario["title"], scenario_id)
+    dialogue_log.info("PC ID: %s", pc_id)
+    dialogue_log.info("")
+    logger.info("Transcript will be saved to %s", transcript_path)
 
     # REQ-003: Scenario-specific AI persona via system_instruction
     llm = GeminiLiveLLMService(
@@ -69,10 +173,15 @@ async def run_bot(
         ),
     )
 
+    user_log = DialogueLogger(session_logger=dialogue_log)
+    bot_log = DialogueLogger(session_logger=dialogue_log)
+
     pipeline = Pipeline([
         transport.input(),
+        user_log,
         user_aggregator,
         llm,
+        bot_log,
         transport.output(),
         assistant_aggregator,
     ])
@@ -80,17 +189,20 @@ async def run_bot(
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
+            allow_interruptions=True,
             enable_metrics=True,
             enable_usage_metrics=True,
         ),
     )
 
-    # REQ-004: AI initiates conversation on client connect
+    # REQ-004: AI initiates conversation on client connect.
+    # send_client_content is required for reliable audio output from Gemini native audio.
+    # Without it, Gemini generates text transcription but drops audio bytes partway through.
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
         context.add_message({
-            "role": "developer",
-            "content": scenario["opening_developer_message"],
+            "role": "user",
+            "content": scenario["opening_prompt"],
         })
         await task.queue_frames([LLMRunFrame()])
 

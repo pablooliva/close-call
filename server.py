@@ -6,8 +6,26 @@ provides scenario list and feedback polling endpoints.
 Run with: python server.py
 """
 
-import logging
+# Fix SSL: if a TLS-intercepting proxy (e.g. Socket Firewall) sets SSL_CERT_FILE
+# to its own CA, the Google genai SDK loses access to public root CAs. Merge both
+# bundles so the proxy CA and real CAs are both trusted.
 import os
+import tempfile
+
+import certifi
+
+_proxy_cert = os.environ.get("SSL_CERT_FILE", "")
+if _proxy_cert and os.path.isfile(_proxy_cert) and _proxy_cert != certifi.where():
+    with open(certifi.where()) as _base, open(_proxy_cert) as _extra:
+        _combined = _base.read() + "\n" + _extra.read()
+    _combined_fd, _combined_path = tempfile.mkstemp(suffix=".pem", prefix="combined-ca-")
+    with os.fdopen(_combined_fd, "w") as _f:
+        _f.write(_combined)
+    os.environ["SSL_CERT_FILE"] = _combined_path
+elif not _proxy_cert:
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+
+import logging
 import time
 
 from dotenv import load_dotenv
@@ -28,6 +46,7 @@ load_dotenv(override=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 app = FastAPI(title="Close Call", version="0.1.0")
 
@@ -91,6 +110,11 @@ async def offer(request: SmallWebRTCRequest, background_tasks: BackgroundTasks):
 @app.patch("/api/offer")
 async def ice_candidate(request: SmallWebRTCPatchRequest):
     """REQ-010: ICE trickle candidates."""
+    # Filter out empty end-of-candidates signals that crash candidate_from_sdp
+    if request.candidates:
+        request.candidates = [
+            c for c in request.candidates if c.candidate and c.candidate.strip()
+        ]
     await handler.handle_patch_request(request)
 
 
