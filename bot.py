@@ -230,6 +230,11 @@ async def run_bot(
                 "feedback": feedback,
                 "created_at": time.time(),
             }
+            # Save feedback as separate markdown file
+            feedback_path = transcript_path.with_suffix(".feedback.md")
+            header = f"# Feedback — {scenario['title']}\n\n"
+            feedback_path.write_text(header + feedback, encoding="utf-8")
+            logger.info("Feedback saved to %s", feedback_path)
             logger.info("Feedback generated for pc_id=%s", pc_id)
         except Exception:
             logger.exception("Failed to generate feedback for pc_id=%s", pc_id)
