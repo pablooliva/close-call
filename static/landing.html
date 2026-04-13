@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Close Call</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+
+        header {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: #fff;
+        }
+
+        .btn-logout {
+            padding: 0.5rem 1.2rem;
+            border: 1px solid #2a2d37;
+            border-radius: 8px;
+            background: transparent;
+            color: #888;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: border-color 0.2s, color 0.2s;
+        }
+
+        .btn-logout:hover {
+            border-color: #e04040;
+            color: #ff8888;
+        }
+
+        .content {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .welcome {
+            color: #aaa;
+            margin-bottom: 2rem;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .section-label {
+            color: #888;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 0.75rem;
+        }
+
+        .video-container {
+            background: #1a1d27;
+            border: 1px solid #2a2d37;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            aspect-ratio: 16 / 9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .video-placeholder {
+            text-align: center;
+            color: #555;
+        }
+
+        .video-placeholder svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 0.5rem;
+            fill: #333;
+        }
+
+        .btn-start {
+            display: inline-block;
+            padding: 0.9rem 2rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            background: #4a7cff;
+            color: #fff;
+            text-decoration: none;
+        }
+
+        .btn-start:hover {
+            background: #3a6ae8;
+        }
+
+        .btn-row {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Close Call</h1>
+    <form action="/api/logout" method="POST" style="margin:0;">
+        <button type="submit" class="btn-logout">Abmelden</button>
+    </form>
+</header>
+
+<div class="content">
+    <p class="welcome">
+        Willkommen beim KI-Verkaufstraining. Schau dir zuerst das kurze Einf&uuml;hrungsvideo an,
+        um zu erfahren, wie die Anwendung funktioniert. Danach kannst du direkt mit dem Training starten.
+    </p>
+
+    <div class="section-label">Einf&uuml;hrung</div>
+    <div class="video-container" id="video-container">
+        <!-- Replace the placeholder with a real video:
+             <video controls src="/static/demo.mp4"></video>
+             Or embed a YouTube/Vimeo iframe here. -->
+        <div class="video-placeholder">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            <p>Demo-Video wird hier angezeigt</p>
+            <p style="font-size:0.8rem; margin-top:0.3rem;">
+                Lege eine Videodatei unter <code>static/demo.mp4</code> ab
+            </p>
+        </div>
+    </div>
+
+    <div class="btn-row">
+        <a href="/call" class="btn-start">Training starten</a>
+    </div>
+</div>
+
+<script>
+(function() {
+    "use strict";
+
+    // Auto-detect demo video — if static/demo.mp4 exists, show the player
+    const container = document.getElementById("video-container");
+    const video = document.createElement("video");
+    video.controls = true;
+    video.preload = "metadata";
+    video.src = "/static/demo.mp4";
+
+    video.addEventListener("loadedmetadata", function() {
+        container.innerHTML = "";
+        container.appendChild(video);
+    });
+
+    // If loading fails, the placeholder stays visible — no action needed
+})();
+</script>
+
+</body>
+</html>

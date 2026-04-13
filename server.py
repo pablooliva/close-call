@@ -26,12 +26,14 @@ elif not _proxy_cert:
     os.environ["SSL_CERT_FILE"] = certifi.where()
 
 import logging
+import secrets
 import time
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import BackgroundTasks, Cookie, FastAPI, HTTPException
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCPatchRequest,
@@ -46,6 +48,39 @@ load_dotenv(override=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Auth credentials from .env
+AUTH_USERNAME = os.environ.get("USERNAME", "")
+AUTH_PASSWORD = os.environ.get("PASSWORD", "")
+
+# Session secret — generated once per server start
+SESSION_SECRET = secrets.token_hex(32)
+
+# Active sessions: token -> expiry timestamp
+sessions: dict[str, float] = {}
+SESSION_TTL = 8 * 3600  # 8 hours
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+def create_session_token() -> str:
+    """Create a signed session token and store it."""
+    token = secrets.token_urlsafe(32)
+    sessions[token] = time.time() + SESSION_TTL
+    return token
+
+
+def is_authenticated(session: str | None) -> bool:
+    """Check if a session token is valid."""
+    if not session or session not in sessions:
+        return False
+    if time.time() > sessions[session]:
+        del sessions[session]
+        return False
+    return True
 
 
 app = FastAPI(title="Close Call", version="0.1.0")
@@ -72,21 +107,56 @@ def cleanup_expired_feedback():
         logger.info("Cleaned up expired feedback for pc_id=%s", pc_id)
 
 
+# --- Auth Endpoints ---
+
+@app.post("/api/login")
+async def login(body: LoginRequest):
+    """Authenticate with username/password from .env."""
+    if not AUTH_USERNAME or not AUTH_PASSWORD:
+        raise HTTPException(status_code=500, detail="Server authentication not configured.")
+    if body.username == AUTH_USERNAME and body.password == AUTH_PASSWORD:
+        token = create_session_token()
+        response = JSONResponse(content={"ok": True})
+        response.set_cookie(
+            key="session",
+            value=token,
+            httponly=True,
+            samesite="strict",
+            max_age=SESSION_TTL,
+        )
+        return response
+    raise HTTPException(status_code=401, detail="Ungültige Anmeldedaten.")
+
+
+@app.post("/api/logout")
+async def logout(session: str | None = Cookie(default=None)):
+    """Clear session."""
+    if session and session in sessions:
+        del sessions[session]
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie("session")
+    return response
+
+
 # --- API Endpoints ---
 
 @app.get("/api/scenarios")
-async def scenarios():
+async def scenarios(session: str | None = Cookie(default=None)):
     """REQ-012: Return scenario list without system prompts."""
+    if not is_authenticated(session):
+        raise HTTPException(status_code=401, detail="Not authenticated")
     return get_scenario_list()
 
 
 @app.post("/api/offer")
-async def offer(request: SmallWebRTCRequest, background_tasks: BackgroundTasks):
+async def offer(request: SmallWebRTCRequest, background_tasks: BackgroundTasks, session: str | None = Cookie(default=None)):
     """REQ-010: SDP exchange and bot spawn.
 
     Validates scenario_id from request_data, performs WebRTC signaling,
     and starts the bot pipeline as a background task.
     """
+    if not is_authenticated(session):
+        raise HTTPException(status_code=401, detail="Not authenticated")
     cleanup_expired_feedback()
 
     # SEC-003: Validate scenario ID
@@ -119,7 +189,7 @@ async def ice_candidate(request: SmallWebRTCPatchRequest):
 
 
 @app.get("/api/feedback/{pc_id}")
-async def get_feedback(pc_id: str):
+async def get_feedback(pc_id: str, session: str | None = Cookie(default=None)):
     """REQ-008: Feedback polling endpoint.
 
     Returns:
@@ -128,6 +198,8 @@ async def get_feedback(pc_id: str):
         404 when pc_id not found
         500 when generation failed
     """
+    if not is_authenticated(session):
+        raise HTTPException(status_code=401, detail="Not authenticated")
     cleanup_expired_feedback()
 
     if pc_id not in feedback_store:
@@ -159,15 +231,33 @@ async def get_feedback(pc_id: str):
     )
 
 
-# --- Static Files ---
+# --- Static Files & Pages ---
 
 # Mount static directory for any additional assets
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+@app.get("/login")
+async def login_page(session: str | None = Cookie(default=None)):
+    """Serve login page, or redirect to landing if already authenticated."""
+    if is_authenticated(session):
+        return RedirectResponse(url="/")
+    return FileResponse("static/login.html")
+
+
 @app.get("/")
-async def index():
-    """REQ-011: Serve the frontend."""
+async def index(session: str | None = Cookie(default=None)):
+    """Serve landing page (requires auth)."""
+    if not is_authenticated(session):
+        return RedirectResponse(url="/login")
+    return FileResponse("static/landing.html")
+
+
+@app.get("/call")
+async def call_page(session: str | None = Cookie(default=None)):
+    """Serve the call/scenario selection page (requires auth)."""
+    if not is_authenticated(session):
+        return RedirectResponse(url="/login")
     return FileResponse("static/index.html")
 
 

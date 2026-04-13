@@ -250,7 +250,12 @@
 </head>
 <body>
 
-<h1>Close Call</h1>
+<div style="width:100%;max-width:700px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+    <h1>Close Call</h1>
+    <form action="/api/logout" method="POST" style="margin:0;">
+        <button type="submit" style="padding:0.5rem 1.2rem;border:1px solid #2a2d37;border-radius:8px;background:transparent;color:#888;font-size:0.85rem;cursor:pointer;">Abmelden</button>
+    </form>
+</div>
 <p class="subtitle">KI-Verkaufstraining -- W&auml;hle ein Szenario und starte das Gespr&auml;ch.</p>
 
 <div id="error-banner" class="error-banner"></div>
@@ -333,6 +338,10 @@
     async function loadScenarios() {
         try {
             const res = await fetch("/api/scenarios");
+            if (res.status === 401) {
+                window.location.href = "/login";
+                return;
+            }
             scenarios = await res.json();
             renderScenarios();
         } catch (e) {
