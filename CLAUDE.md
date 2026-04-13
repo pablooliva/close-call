@@ -39,7 +39,8 @@ Dependencies are defined in `pyproject.toml`, not `requirements.txt`. The `requi
 |------|---------|
 | `server.py` | FastAPI app: signaling, static files, scenarios, feedback polling |
 | `bot.py` | Pipecat pipeline: voice AI, transcript collection, feedback trigger |
-| `scenarios.py` | 5 German-language scenario definitions |
+| `scenarios.py` | Scenario loader — reads .md files from `scenarios/` |
+| `scenarios/*.md` | Scenario definitions (one per file, YAML frontmatter + markdown body) |
 | `feedback.py` | Post-call coaching generation via Gemini text API |
 | `static/index.html` | Single-page frontend (scenario picker, call UI, feedback display) |
 
