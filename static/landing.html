@@ -116,6 +116,39 @@
             background: #3a6ae8;
         }
 
+        .feedback-section {
+            margin-bottom: 2rem;
+        }
+
+        .feedback-context {
+            color: #888;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 0.75rem;
+        }
+
+        .feedback-link {
+            display: inline-flex;
+            align-items: center;
+            color: #4a7cff;
+            font-size: 0.95rem;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .feedback-link:hover {
+            color: #6e9aff;
+            text-decoration: underline;
+        }
+
+        .feedback-link svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+            vertical-align: middle;
+            margin-right: 0.4rem;
+        }
+
         .btn-row {
             text-align: center;
         }
@@ -150,6 +183,17 @@
         </div>
     </div>
 
+    <div id="feedback-section" class="feedback-section" style="display:none;">
+        <p class="feedback-context">
+            Nach jedem Gespr&auml;ch erstellt die KI ein individuelles Feedback mit konkreten Verbesserungsvorschl&auml;gen.
+            Hier siehst du ein Beispiel-Feedback aus dem Demo-Gespr&auml;ch im Video oben:
+        </p>
+        <a href="/static/demo-feedback.html" class="feedback-link" target="_blank">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zm-3 9H7v-1h3v1zm5 4H7v-1h8v1zm0-2H7v-1h8v1z"/></svg>
+            Beispiel-Feedback ansehen
+        </a>
+    </div>
+
     <div class="btn-row">
         <a href="/call" class="btn-start">Training starten</a>
     </div>
@@ -172,6 +216,14 @@
     });
 
     // If loading fails, the placeholder stays visible — no action needed
+
+    // Auto-detect feedback file
+    var feedbackSection = document.getElementById("feedback-section");
+    fetch("/static/demo-feedback.html", { method: "HEAD" }).then(function(resp) {
+        if (resp.ok) {
+            feedbackSection.style.display = "";
+        }
+    });
 })();
 </script>
 

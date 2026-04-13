@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback — Close Call</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+            line-height: 1.6;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: #888;
+            text-decoration: none;
+            font-size: 0.85rem;
+            margin-bottom: 2rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover { color: #4a7cff; }
+
+        h1 {
+            font-size: 1.6rem;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: #1a1d27;
+            border: 1px solid #2a2d37;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h2 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-good h2 { color: #4ade80; }
+        .card-improve h2 { color: #facc15; }
+        .card-key h2 { color: #f87171; }
+
+        .card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .card ul li {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #2a2d37;
+        }
+
+        .card ul li:last-child { border-bottom: none; }
+
+        .card ul li strong {
+            color: #fff;
+        }
+
+        .suggestion {
+            background: #12141c;
+            border-left: 3px solid #4a7cff;
+            border-radius: 0 8px 8px 0;
+            padding: 0.75rem 1rem;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #bbb;
+        }
+
+        .suggestion-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #4a7cff;
+            margin-bottom: 0.25rem;
+        }
+
+        .highlight {
+            background: #2a1a1a;
+            border: 1px solid #4a2020;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin: 0.75rem 0;
+            color: #f0a0a0;
+            font-style: italic;
+        }
+
+        .icon { font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <a href="/" class="back-link">&larr; Zur&uuml;ck zur &Uuml;bersicht</a>
+
+    <h1>Feedback &mdash; Preisverhandlung (Gewerblich)</h1>
+    <p class="subtitle">Szenario: Preissensitiver Gewerbekunde</p>
+
+    <div class="card card-good">
+        <h2><span class="icon">&#10003;</span> Was gut lief</h2>
+        <ul>
+            <li><strong>Den Preis-Einwand geh&ouml;rt:</strong> Der Verk&auml;ufer hat den anf&auml;nglichen Preis-Einwand des Kunden sofort erkannt und nicht ignoriert.</li>
+            <li><strong>Fokus auf Wert statt Preis:</strong> Er hat versucht, die Diskussion von &bdquo;g&uuml;nstig&ldquo; auf &bdquo;beste&ldquo; zu verlagern, was grunds&auml;tzlich der richtige Ansatz ist, um Mehrwert zu argumentieren.</li>
+            <li><strong>Auf Garantiewunsch reagiert:</strong> Als der Kunde die Garantie als wichtigen Punkt nannte, wurde das Thema aufgegriffen.</li>
+        </ul>
+    </div>
+
+    <div class="card card-improve">
+        <h2><span class="icon">&#9888;</span> Was besser werden kann</h2>
+        <ul>
+            <li>
+                <strong>Pr&auml;zision bei Wertargumenten:</strong> Statt vager Aussagen wie &bdquo;wir sind die beste&ldquo; oder &bdquo;die beste Garantie in unsere Bereich&ldquo;, konkrete Zahlen und Vorteile nennen. Der Kunde bat um &bdquo;konkrete ROI-Zahlen und handfeste Garantieunterschiede&ldquo; &ndash; genau das h&auml;tte geliefert werden m&uuml;ssen.
+                <div class="suggestion">
+                    <div class="suggestion-label">Vorschlag</div>
+                    &bdquo;Unsere <strong>X-j&auml;hrige Produktgarantie</strong> und <strong>Y-j&auml;hrige Leistungsgarantie</strong> sind Z Jahre l&auml;nger als der Branchendurchschnitt. Das bedeutet f&uuml;r Sie h&ouml;here Planungssicherheit und geringere Wartungskosten &uuml;ber die gesamte Lebensdauer der Anlage.&ldquo;
+                </div>
+            </li>
+            <li>
+                <strong>Proaktive Bereitstellung von Fakten:</strong> Der Kunde <em>fragte</em> zweimal explizit nach ROI-Zahlen. Diese h&auml;tte der Verk&auml;ufer vorbereitet haben und aktiv, &uuml;berzeugend pr&auml;sentieren m&uuml;ssen.
+                <div class="suggestion">
+                    <div class="suggestion-label">Vorschlag</div>
+                    &bdquo;Herr Weber, zum ROI habe ich konkrete Berechnungen f&uuml;r Sie, die zeigen, dass sich unser h&ouml;herer Preis in der Regel nach X Jahren durch Y amortisiert und Sie &uuml;ber die gesamte Laufzeit Z Euro an zus&auml;tzlichen Einsparungen erzielen. Soll ich Ihnen das kurz erl&auml;utern?&ldquo;
+                </div>
+            </li>
+            <li>
+                <strong>Beziehungspflege und Professionalit&auml;t:</strong> Das Gespr&auml;ch abrupt und unh&ouml;flich zu beenden, w&auml;hrend der Kunde Interesse bekundet, ist absolut inakzeptabel und kostet Sie den Abschluss.
+                <div class="suggestion">
+                    <div class="suggestion-label">Vorschlag</div>
+                    Selbst wenn Sie das Gef&uuml;hl haben, der Kunde passt nicht, bleiben Sie professionell. Statt aufzulegen: &bdquo;Herr Weber, ich sp&uuml;re Ihre Bedenken. Gibt es noch Informationen, die ich Ihnen geben kann, oder macht es Sinn, die detaillierten ROI-Berechnungen in einem Folgetermin durchzugehen?&ldquo;
+                </div>
+            </li>
+        </ul>
+    </div>
+
+    <div class="card card-key">
+        <h2><span class="icon">&#9899;</span> Schl&uuml;sselmoment</h2>
+        <p>Der Schl&uuml;sselmoment war, als der Verk&auml;ufer das Gespr&auml;ch beendet hat mit:</p>
+        <div class="highlight">&bdquo;Wissen Sie was, ich glaube, Sie sind nicht die richtige Kunde f&uuml;r uns.&ldquo;</div>
+        <p>
+            Der Kunde hat in diesem Gespr&auml;ch <strong>mehrfach klare Kaufsignale</strong> gesendet, indem er explizit nach
+            &bdquo;konkreten ROI-Zahlen&ldquo; und &bdquo;handfesten Garantieunterschieden&ldquo; gefragt hat. Er sagte sogar nach der Abweisung:
+            &bdquo;Moment, so schnell gebe ich nicht auf. Ich bin durchaus interessiert.&ldquo;
+        </p>
+        <p style="margin-top: 0.75rem;">
+            Anstatt ihn abzuweisen, h&auml;tte der Verk&auml;ufer diese Informationen detailliert pr&auml;sentieren und einen n&auml;chsten
+            Schritt vorschlagen m&uuml;ssen, um das Interesse des Kunden weiter zu festigen. Hier wurde eine goldene Verkaufschance
+            im letzten Moment selbst zerst&ouml;rt.
+        </p>
+    </div>
+</div>
+
+</body>
+</html>
