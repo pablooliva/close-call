@@ -131,37 +131,27 @@ class DialogueLogger(FrameProcessor):
         await super().cleanup()
 
 
-def _interleave_transcript(user_transcript: str, messages: list[dict]) -> str:
-    """Interleave user audio transcript lines with bot context messages.
+async def transcribe_user_audio(wav_path: Path, bot_turns: list[str], dialogue_log: logging.Logger) -> str:
+    """Transcribe user audio using Gemini Flash with bot turns as context.
 
-    The bot always speaks first in this app, so the natural order is:
-    Kunde[0], Verkäufer[0], Kunde[1], Verkäufer[1], ...
-    If turns are uneven the remaining lines are appended at the end.
-    """
-    user_lines = [l.strip() for l in user_transcript.strip().splitlines() if l.strip()]
-    bot_lines = [
-        f"Kunde: {m['content']}"
-        for m in messages
-        if m.get("role") == "assistant" and m.get("content")
-    ]
-    result = []
-    for i in range(max(len(user_lines), len(bot_lines))):
-        if i < len(bot_lines):
-            result.append(bot_lines[i])
-        if i < len(user_lines):
-            result.append(user_lines[i])
-    return "\n".join(result)
+    Uploads the user-only WAV to Gemini Files API and asks for a turn-by-turn
+    transcription, using the bot's known dialogue as anchoring context so Gemini
+    can split the salesperson's speech into matching turns.
 
+    Args:
+        wav_path: Path to the user-only mono WAV file.
+        bot_turns: List of the bot's (customer's) dialogue lines, in order.
+        dialogue_log: Per-session logger for transcript output.
 
-async def transcribe_audio(wav_path: Path, dialogue_log: logging.Logger) -> str:
-    """Transcribe WAV file using Gemini Flash. Returns transcript text or '' on failure.
-
-    Uploads to Gemini Files API, transcribes, then deletes the uploaded file (REQ-010).
-    Skipped entirely if SKIP_TRANSCRIPTION=true env var is set (MAINT-002).
+    Returns:
+        Full interleaved transcript string, or '' on failure.
     """
     if os.getenv("SKIP_TRANSCRIPTION", "").lower() == "true":
         logger.info("SKIP_TRANSCRIPTION set — skipping transcription")
         return ""
+
+    # Build the bot context for the prompt
+    bot_context = "\n".join(f"Kunde (Turn {i+1}): {line}" for i, line in enumerate(bot_turns))
 
     audio_file = None
     try:
@@ -170,7 +160,7 @@ async def transcribe_audio(wav_path: Path, dialogue_log: logging.Logger) -> str:
             genai.upload_file, str(wav_path), mime_type="audio/wav"
         )
         logger.info("Uploaded WAV to Gemini Files API: %s", audio_file.name)
-        # Files API processes uploads asynchronously; wait for ACTIVE state before generating
+        # Files API processes uploads asynchronously; wait for ACTIVE state
         for _ in range(30):
             if audio_file.state.name != "PROCESSING":
                 break
@@ -178,17 +168,29 @@ async def transcribe_audio(wav_path: Path, dialogue_log: logging.Logger) -> str:
             audio_file = await asyncio.to_thread(genai.get_file, audio_file.name)
         else:
             raise RuntimeError("Gemini file still PROCESSING after 15s — giving up")
+
         model = genai.GenerativeModel("gemini-2.5-flash")
         response = await model.generate_content_async([
-            "Transkribiere diese Audioaufnahme. "
-            "Dies ist ausschließlich die Stimme des Verkäufers (Memodo-Vertrieb) — "
-            "keine anderen Sprecher sind enthalten. "
-            "Stelle jeder Aussage 'Verkäufer: ' voran. "
-            "Nur der transkribierte Text, keine Erklärungen.",
+            "This audio contains ONLY the salesperson's (Verkäufer) side of a phone conversation. "
+            "The other side (the customer/Kunde) is NOT in the audio but I have their transcript below.\n\n"
+            "The conversation alternates: the customer speaks first, then the salesperson responds, "
+            "then the customer again, and so on.\n\n"
+            f"CUSTOMER'S KNOWN DIALOGUE (for context — NOT in the audio):\n{bot_context}\n\n"
+            "TASK: Transcribe the salesperson's audio and produce the FULL interleaved dialogue. "
+            "Output format — one line per turn, alternating:\n"
+            "Kunde: <customer's known text>\n"
+            "Verkäufer: <transcribed salesperson text>\n"
+            "Kunde: <customer's known text>\n"
+            "Verkäufer: <transcribed salesperson text>\n"
+            "...and so on.\n\n"
+            "Rules:\n"
+            "- Use the customer lines EXACTLY as provided above\n"
+            "- Transcribe the salesperson's speech accurately, splitting at the natural turn boundaries\n"
+            "- If the salesperson spoke in a different language than the customer, transcribe in the language they actually used\n"
+            "- Output ONLY the dialogue lines, no explanations or commentary",
             audio_file,
         ])
-        transcript = response.text
-        # REQ-011: Log transcript to session file
+        transcript = response.text.strip()
         dialogue_log.info("[TRANSCRIPT]\n%s", transcript)
         logger.info("Transcription complete (%d chars)", len(transcript))
         return transcript
@@ -196,7 +198,6 @@ async def transcribe_audio(wav_path: Path, dialogue_log: logging.Logger) -> str:
         logger.warning("Transcription failed: %s", e)
         return ""
     finally:
-        # REQ-010: Delete uploaded audio from Gemini's servers
         if audio_file is not None:
             try:
                 await asyncio.to_thread(genai.delete_file, audio_file.name)
@@ -263,10 +264,9 @@ async def run_bot(
         enable_turn_audio=False,
     )
 
-    # Closure dict: shares WAV path between on_track_audio_data and disconnect handler.
-    # wav_ready signals when the handler has finished (stop_recording() does not
-    # await the handler before returning, so we need explicit coordination).
-    wav_path_holder = {"path": None}  # user-only WAV path, used for transcription
+    # Shares WAV path between on_track_audio_data and disconnect handler.
+    # wav_ready signals when the handler has finished writing.
+    wav_path_holder = {"path": None}
     wav_ready = asyncio.Event()
 
     @audio_buffer.event_handler("on_audio_data")
@@ -287,7 +287,7 @@ async def run_bot(
 
     @audio_buffer.event_handler("on_track_audio_data")
     async def on_track_audio_data(processor, user_audio, bot_audio, sample_rate, num_channels):
-        # Save user-only mono WAV for transcription (no diarization needed)
+        # Save user-only mono WAV for transcription
         user_wav_path = transcript_path.with_suffix(".user.wav")
         def _write():
             with wave.open(str(user_wav_path), "wb") as wf:
@@ -302,7 +302,7 @@ async def run_bot(
         except Exception as e:
             logger.error("Failed to save user WAV: %s", e)
         finally:
-            wav_ready.set()  # on_track_audio_data fires after on_audio_data — both are done
+            wav_ready.set()
 
     pipeline = Pipeline([
         transport.input(),
@@ -353,20 +353,25 @@ async def run_bot(
         }
 
         try:
-            await audio_buffer.stop_recording()  # triggers on_audio_data (fired async — does not block here)
+            await audio_buffer.stop_recording()  # triggers on_audio_data + on_track_audio_data
             try:
-                await asyncio.wait_for(wav_ready.wait(), timeout=30.0)  # wait for WAV write to finish
+                await asyncio.wait_for(wav_ready.wait(), timeout=30.0)
             except asyncio.TimeoutError:
                 logger.warning("Timed out waiting for WAV file — skipping transcription")
-            wav_path = wav_path_holder["path"]
-            transcript_text = ""
-            if wav_path and wav_path.exists():
-                transcript_text = await transcribe_audio(wav_path, dialogue_log)  # REQ-003
 
             messages = context.get_messages()
+            wav_path = wav_path_holder["path"]
 
-            # Build interleaved transcript: bot speaks first, then alternates
-            combined_transcript = _interleave_transcript(transcript_text, messages) if transcript_text else ""
+            # Extract bot turns for use as transcription context
+            bot_turns = [
+                m["content"] for m in messages
+                if m.get("role") == "assistant" and m.get("content")
+            ]
+
+            # Transcribe user audio with bot turns as anchoring context
+            combined_transcript = ""
+            if wav_path and wav_path.exists():
+                combined_transcript = await transcribe_user_audio(wav_path, bot_turns, dialogue_log)
 
             if combined_transcript:
                 transcript_file = transcript_path.with_suffix(".transcript.txt")
