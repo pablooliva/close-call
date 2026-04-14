@@ -54,6 +54,8 @@ PyInstaller.__main__.run([
     "--collect-submodules=google.api_core",
     # Ensure certifi's CA bundle is included
     "--collect-data=certifi",
+    # Pipecat data files (ONNX model for smart turn detection, etc.)
+    "--collect-data=pipecat",
     # Package metadata needed at runtime (importlib.metadata.version() calls)
     "--copy-metadata=pipecat-ai",
     "--copy-metadata=google-generativeai",
