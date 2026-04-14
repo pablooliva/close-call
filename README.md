@@ -1,6 +1,6 @@
 # Close Call
 
-AI voice agent for practicing German-language solar sales conversations. Pick a scenario, talk to an AI customer, get coaching feedback.
+AI voice agent for practicing sales conversations. Pick a scenario, talk to an AI customer, get coaching feedback.
 
 Built with [Pipecat](https://github.com/pipecat-ai/pipecat) + Gemini 2.5 Flash native audio.
 
@@ -29,6 +29,19 @@ cp .env.example .env
 docker compose up --build
 # Open http://localhost:7860
 ```
+
+## Desktop App
+
+For non-technical users: package Close Call as a standalone executable. Users double-click to start -- no Python, no terminal, no setup.
+
+```bash
+# Make sure .env has your GOOGLE_API_KEY (it gets baked into the build)
+uv run python build_desktop.py
+```
+
+Output lands in `dist/` (~690MB). Distribute the `CloseCall/` folder (or `CloseCall.app` on macOS). The user double-clicks it, the server starts locally, and their browser opens to the app.
+
+See [Desktop App Details](#desktop-app-details) below for platform notes and distribution tips.
 
 ## What It Does
 
@@ -162,23 +175,15 @@ Output files per session (in transcripts/):
   <timestamp>_<scenario>.feedback.md     -- coaching feedback
 ```
 
-## Desktop App
+## Desktop App Details
 
-Close Call can be packaged as a standalone desktop application with PyInstaller. Users double-click the executable, the server starts locally, and their default browser opens to the app -- no Python install, no server setup, no login required.
+### Build Output
 
-### Building
-
-Make sure your `.env` file contains the `GOOGLE_API_KEY` you want bundled into the app, then:
-
-```bash
-uv run python build_desktop.py
-```
-
-This produces two outputs in `dist/`:
+`uv run python build_desktop.py` produces two outputs in `dist/`:
 - `CloseCall/` -- a folder with the executable and supporting files
 - `CloseCall.app` -- a macOS app bundle (on macOS)
 
-Build time is roughly 1-2 minutes. Output size is ~690MB (includes Python runtime, Pipecat, OpenCV, etc.).
+Build time is roughly 1-2 minutes.
 
 ### Distributing
 
@@ -186,17 +191,13 @@ Send the user either:
 - The `dist/CloseCall/` folder (zip it up), or
 - The `dist/CloseCall.app` bundle on macOS
 
-The `.env` with your API key is baked into the build -- users don't need to configure anything.
-
-If a user needs to use a different API key, they can place a `.env` file next to the executable to override the bundled one.
+The `.env` with your API key is baked into the build -- users don't need to configure anything. If a user needs a different API key, they can place a `.env` file next to the executable to override the bundled one.
 
 ### Running
 
-The user double-clicks `CloseCall` (or `CloseCall.app` on macOS). The server starts in the background and their default browser opens to the landing page. The server runs on localhost -- WebRTC connects locally, so there are no network latency or audio quality issues.
+Double-click `CloseCall` (or `CloseCall.app` on macOS). The server starts in the background and the default browser opens to the landing page. WebRTC connects locally -- no network latency issues.
 
-To stop the server, quit the app from the Dock (macOS) or close the process.
-
-Transcripts and feedback files are saved to a `transcripts/` folder next to the executable.
+To stop the server, quit the app from the Dock (macOS) or close the process. Transcripts and feedback are saved to a `transcripts/` folder next to the executable.
 
 ### Platform Notes
 
