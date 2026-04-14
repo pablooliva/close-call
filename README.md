@@ -6,7 +6,7 @@ Built with [Pipecat](https://github.com/pipecat-ai/pipecat) + Gemini 2.5 Flash n
 
 <video src="static/demo.mp4" controls width="100%"></video>
 
-[See example feedback output](static/demo-feedback.html)
+[See example feedback output](static/demo-feedback.md)
 
 ## Quick Start (uv)
 
