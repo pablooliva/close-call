@@ -8,6 +8,7 @@ on client disconnect.
 import asyncio
 import logging
 import os
+import sys
 import time
 import wave
 from datetime import datetime
@@ -46,7 +47,14 @@ load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
-TRANSCRIPTS_DIR = Path(__file__).parent / "transcripts"
+def _get_transcripts_dir() -> Path:
+    """Return the transcripts directory. When running as a PyInstaller bundle,
+    write next to the executable instead of inside the temp _MEIPASS dir."""
+    if getattr(sys, "frozen", False):
+        return Path(os.path.dirname(sys.executable)) / "transcripts"
+    return Path(__file__).parent / "transcripts"
+
+TRANSCRIPTS_DIR = _get_transcripts_dir()
 
 
 def _create_session_logger(scenario_id: str) -> tuple[logging.Logger, Path]:

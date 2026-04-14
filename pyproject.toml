@@ -11,5 +11,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "python-frontmatter>=1.1.0",
+    "pyinstaller>=6.19.0",
+    "requests>=2.33.1",
 ]
 

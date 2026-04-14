@@ -49,6 +49,9 @@ load_dotenv(override=True)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Desktop mode: skip auth when running as packaged desktop app
+DESKTOP_MODE = os.environ.get("DESKTOP_MODE", "").lower() == "true"
+
 # Auth credentials from .env
 AUTH_USERNAME = os.environ.get("USERNAME", "")
 AUTH_PASSWORD = os.environ.get("PASSWORD", "")
@@ -74,7 +77,9 @@ def create_session_token() -> str:
 
 
 def is_authenticated(session: str | None) -> bool:
-    """Check if a session token is valid."""
+    """Check if a session token is valid. Always True in desktop mode."""
+    if DESKTOP_MODE:
+        return True
     if not session or session not in sessions:
         return False
     if time.time() > sessions[session]:

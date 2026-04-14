@@ -162,9 +162,52 @@ Output files per session (in transcripts/):
   <timestamp>_<scenario>.feedback.md     -- coaching feedback
 ```
 
+## Desktop App
+
+Close Call can be packaged as a standalone desktop application with PyInstaller. Users double-click the executable, the server starts locally, and their default browser opens to the app -- no Python install, no server setup, no login required.
+
+### Building
+
+Make sure your `.env` file contains the `GOOGLE_API_KEY` you want bundled into the app, then:
+
+```bash
+uv run python build_desktop.py
+```
+
+This produces two outputs in `dist/`:
+- `CloseCall/` -- a folder with the executable and supporting files
+- `CloseCall.app` -- a macOS app bundle (on macOS)
+
+Build time is roughly 1-2 minutes. Output size is ~690MB (includes Python runtime, Pipecat, OpenCV, etc.).
+
+### Distributing
+
+Send the user either:
+- The `dist/CloseCall/` folder (zip it up), or
+- The `dist/CloseCall.app` bundle on macOS
+
+The `.env` with your API key is baked into the build -- users don't need to configure anything.
+
+If a user needs to use a different API key, they can place a `.env` file next to the executable to override the bundled one.
+
+### Running
+
+The user double-clicks `CloseCall` (or `CloseCall.app` on macOS). The server starts in the background and their default browser opens to the landing page. The server runs on localhost -- WebRTC connects locally, so there are no network latency or audio quality issues.
+
+To stop the server, quit the app from the Dock (macOS) or close the process.
+
+Transcripts and feedback files are saved to a `transcripts/` folder next to the executable.
+
+### Platform Notes
+
+- You must build on each target platform (a macOS build won't run on Windows and vice versa). Use CI with platform-specific runners to automate this.
+- **macOS:** Unsigned apps trigger a Gatekeeper warning. Users can right-click > Open to bypass it, or you can sign/notarize with an Apple Developer account ($99/year).
+- **Windows:** Unsigned `.exe` files trigger a SmartScreen warning. A code signing certificate removes it.
+- The browser will prompt for **microphone permission** on first use.
+
 ## Requirements
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) package manager
 - A [Google AI Studio](https://aistudio.google.com/) API key (free tier sufficient)
-- A browser with microphone access
+- A browser with microphone access (for the web version)
