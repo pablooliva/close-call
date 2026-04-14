@@ -4,7 +4,7 @@ AI voice agent for practicing sales conversations. Pick a scenario, talk to an A
 
 Built with [Pipecat](https://github.com/pipecat-ai/pipecat) + Gemini 2.5 Flash native audio.
 
-https://github.com/pablooliva/close-call/raw/main/static/demo.mp4
+https://github.com/user-attachments/assets/21a24a02-5263-43e4-97f7-b383d9680bac
 
 [See example feedback output](static/demo-feedback.md)
 
