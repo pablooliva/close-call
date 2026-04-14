@@ -6,7 +6,6 @@ __pycache__/
 transcripts/
 Close Call.url
 .DS_Store
-demo.mp4
 build/
 dist/
 *.spec
