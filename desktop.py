@@ -1,8 +1,11 @@
 """Desktop launcher for Close Call.
 
-Starts the FastAPI server and opens the default browser.
-Auth is bypassed via DESKTOP_MODE. The server runs in the foreground
-and keeps the process alive until the user closes the terminal / app.
+Starts the FastAPI server in a background thread, opens the default
+browser, and shows a small tkinter status window with a Quit button.
+The tkinter window runs on the main thread (required by macOS) and
+gives the app a Dock icon so users can quit normally.
+
+Auth is bypassed via DESKTOP_MODE.
 
 Run with: uv run python desktop.py
 Build with: uv run python build_desktop.py
@@ -10,10 +13,12 @@ Build with: uv run python build_desktop.py
 
 import logging
 import os
+import signal
 import socket
 import sys
 import threading
 import time
+import tkinter as tk
 import webbrowser
 
 import uvicorn
@@ -60,6 +65,69 @@ def wait_and_open_browser(port: int, timeout: float = 15.0):
     logger.error("Server failed to start within %.0f seconds", timeout)
 
 
+def run_server(app, port: int):
+    """Run uvicorn in a background thread."""
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=port,
+        workers=1,
+        log_level="info",
+    )
+
+
+def create_status_window(port: int) -> None:
+    """Show a small tkinter window with server status and a Quit button.
+
+    Must be called from the main thread (macOS requirement for GUI).
+    Closing the window or clicking Quit terminates the process.
+    """
+    root = tk.Tk()
+    root.title("Close Call")
+    root.resizable(False, False)
+
+    # Center the window on screen
+    width, height = 300, 130
+    screen_w = root.winfo_screenwidth()
+    screen_h = root.winfo_screenheight()
+    x = (screen_w - width) // 2
+    y = (screen_h - height) // 2
+    root.geometry(f"{width}x{height}+{x}+{y}")
+
+    frame = tk.Frame(root, padx=20, pady=15)
+    frame.pack(expand=True, fill="both")
+
+    tk.Label(
+        frame,
+        text="Close Call is running",
+        font=("Helvetica", 14, "bold"),
+    ).pack(pady=(0, 4))
+
+    tk.Label(
+        frame,
+        text=f"Server: http://127.0.0.1:{port}",
+        font=("Helvetica", 11),
+        fg="#555555",
+    ).pack(pady=(0, 12))
+
+    def quit_app():
+        logger.info("Quit requested — shutting down")
+        root.destroy()
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    tk.Button(
+        frame,
+        text="Quit Server",
+        command=quit_app,
+        width=14,
+    ).pack()
+
+    # Closing the window also quits
+    root.protocol("WM_DELETE_WINDOW", quit_app)
+
+    root.mainloop()
+
+
 def main():
     # Set desktop mode so server skips auth
     os.environ["DESKTOP_MODE"] = "true"
@@ -87,18 +155,20 @@ def main():
     # Import app after env is loaded and cwd is set
     from server import app
 
-    # Open browser once server is ready (background thread)
-    threading.Thread(target=wait_and_open_browser, args=(port,), daemon=True).start()
-
-    # Run server in the main thread (keeps the process alive)
-    logger.info("Starting Close Call server on port %d ...", port)
-    uvicorn.run(
-        app,
-        host="127.0.0.1",
-        port=port,
-        workers=1,
-        log_level="info",
+    # Run uvicorn in a daemon thread so it dies when the main thread exits
+    server_thread = threading.Thread(
+        target=run_server, args=(app, port), daemon=True
     )
+    server_thread.start()
+    logger.info("Starting Close Call server on port %d ...", port)
+
+    # Open browser once server is ready (background thread)
+    threading.Thread(
+        target=wait_and_open_browser, args=(port,), daemon=True
+    ).start()
+
+    # tkinter status window on main thread (required by macOS)
+    create_status_window(port)
 
 
 if __name__ == "__main__":

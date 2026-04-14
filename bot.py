@@ -234,6 +234,23 @@ async def run_bot(
     dialogue_log.info("=== Close Call Session ===")
     dialogue_log.info("Scenario: %s (%s)", scenario["title"], scenario_id)
     dialogue_log.info("PC ID: %s", pc_id)
+
+    try:
+        await _run_bot_pipeline(connection, scenario, pc_id, feedback_store, dialogue_log, transcript_path)
+    except Exception:
+        dialogue_log.exception("[FATAL] Pipeline crashed")
+        logger.exception("Pipeline crashed for pc_id=%s", pc_id)
+
+
+async def _run_bot_pipeline(
+    connection: SmallWebRTCConnection,
+    scenario: dict,
+    pc_id: str,
+    feedback_store: dict,
+    dialogue_log: logging.Logger,
+    transcript_path: Path,
+):
+    """Inner pipeline logic, wrapped by run_bot for error logging."""
     dialogue_log.info("")
     logger.info("Transcript will be saved to %s", transcript_path)
 
