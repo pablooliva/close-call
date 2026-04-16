@@ -191,7 +191,14 @@ Build time is roughly 1-2 minutes.
 
 ### Distributing
 
-Send the user either:
+On macOS, package the app as a DMG for safe distribution (avoids corruption from cloud storage services like Proton Drive, Google Drive, etc. that mishandle `.app` bundles):
+
+```bash
+./create_dmg.sh
+# Output: dist/CloseCall.dmg
+```
+
+Alternatively, send the user:
 - The `dist/CloseCall/` folder (zip it up), or
 - The `dist/CloseCall.app` bundle on macOS
 
