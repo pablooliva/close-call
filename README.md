@@ -204,9 +204,19 @@ Alternatively, send the user:
 
 The `.env` with your API key is baked into the build -- users don't need to configure anything. If a user needs a different API key, they can place a `.env` file next to the executable to override the bundled one.
 
+### Installing from DMG
+
+After downloading `CloseCall.dmg`, double-click it to mount the disk image. Drag `CloseCall.app` into your `/Applications` folder. Before running it, open Terminal and remove the quarantine flag (required because the app is unsigned):
+
+```bash
+xattr -cr /Applications/CloseCall.app
+```
+
+Without this step, macOS Gatekeeper will report the app as "damaged" and refuse to open it.
+
 ### Running
 
-Double-click `CloseCall` (or `CloseCall.app` on macOS). The server starts in the background and the default browser opens to the landing page. WebRTC connects locally -- no network latency issues.
+Double-click `CloseCall.app` from `/Applications` (or wherever you placed it). The server starts in the background and the default browser opens to the landing page. WebRTC connects locally -- no network latency issues.
 
 To stop the server, quit the app from the Dock (macOS) or close the process. Transcripts and feedback are saved to a `transcripts/` folder next to the executable.
 
