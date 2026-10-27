@@ -41,7 +41,10 @@ PyInstaller.__main__.run([
     "--collect-submodules=pipecat.pipeline",
     "--collect-submodules=pipecat.frames",
     "--collect-submodules=pipecat.processors",
-    "--collect-submodules=pipecat.services.google",
+    "--collect-submodules=pipecat.services.azure",
+    "--collect-submodules=pipecat.services.openai",
+    "--collect-submodules=pipecat.adapters",
+    "--collect-submodules=pipecat.workers",
     "--collect-submodules=pipecat.transcriptions",
     "--collect-submodules=pipecat.transports",
     "--collect-submodules=pipecat.audio",
@@ -49,16 +52,14 @@ PyInstaller.__main__.run([
     "--collect-submodules=pipecat.metrics",
     "--collect-submodules=pipecat.clocks",
     "--collect-submodules=pipecat.utils",
-    "--collect-submodules=google.generativeai",
-    "--collect-submodules=google.auth",
-    "--collect-submodules=google.api_core",
+    "--collect-submodules=openai",
     # Ensure certifi's CA bundle is included
     "--collect-data=certifi",
     # Pipecat data files (ONNX model for smart turn detection, etc.)
     "--collect-data=pipecat",
     # Package metadata needed at runtime (importlib.metadata.version() calls)
     "--copy-metadata=pipecat-ai",
-    "--copy-metadata=google-generativeai",
+    "--copy-metadata=openai",
     "--copy-metadata=fastapi",
     "--copy-metadata=uvicorn",
 ])

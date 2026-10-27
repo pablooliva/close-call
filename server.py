@@ -7,7 +7,7 @@ Run with: python server.py
 """
 
 # Fix SSL: if a TLS-intercepting proxy (e.g. Socket Firewall) sets SSL_CERT_FILE
-# to its own CA, the Google genai SDK loses access to public root CAs. Merge both
+# to its own CA, HTTPS/WSS clients lose access to public root CAs. Merge both
 # bundles so the proxy CA and real CAs are both trusted.
 import os
 import tempfile

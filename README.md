@@ -2,7 +2,7 @@
 
 AI voice agent for practicing sales conversations. Pick a scenario, talk to an AI customer, get coaching feedback.
 
-Built with [Pipecat](https://github.com/pipecat-ai/pipecat) + Gemini 2.5 Flash native audio.
+Built with [Pipecat](https://github.com/pipecat-ai/pipecat) + Azure OpenAI `gpt-realtime-2.1` (speech-to-speech).
 
 https://github.com/user-attachments/assets/21a24a02-5263-43e4-97f7-b383d9680bac
 
@@ -15,9 +15,9 @@ https://github.com/user-attachments/assets/21a24a02-5263-43e4-97f7-b383d9680bac
 git clone https://github.com/your-org/close-call.git
 cd close-call
 
-# 2. Set up API key
+# 2. Set up Azure credentials
 cp .env.example .env
-# Edit .env and add your Google AI Studio key: https://aistudio.google.com/
+# Edit .env: AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY (see Requirements)
 
 # 3. Install and run
 uv sync
@@ -39,7 +39,7 @@ docker compose up --build
 For non-technical users: package Close Call as a standalone executable. Users double-click to start -- no Python, no terminal, no setup.
 
 ```bash
-# Make sure .env has your GOOGLE_API_KEY (it gets baked into the build)
+# Make sure .env has your Azure credentials (they get baked into the build)
 uv run python build_desktop.py
 ```
 
@@ -67,9 +67,10 @@ See [Desktop App Details](#desktop-app-details) below for platform notes and dis
 
 | Usage | Cost |
 |-------|------|
-| Development (free tier) | $0 |
-| Per 10-min practice call | ~$0.14-0.40 |
-| 10 salespeople, 3 calls/week | ~$15-50/month |
+| Per 10-min practice call | ~$0.60-1.10 |
+| 10 salespeople, 3 calls/week | ~$80-145/month |
+
+Estimates based on OpenAI's list prices for `gpt-realtime-2.1` (~$0.06-0.11 per conversation minute); check the Azure OpenAI pricing page for current rates.
 
 ## Architecture Flow
 
@@ -111,7 +112,7 @@ See [Desktop App Details](#desktop-app-details) below for platform notes and dis
 |  |  transport.input()                                               | |
 |  |    --> DialogueLogger (user)                                     | |
 |  |    --> user_aggregator                                           | |
-|  |    --> GeminiLiveLLMService                                      | |
+|  |    --> AzureRealtimeLLMService                                   | |
 |  |    --> AudioBufferProcessor                                      | |
 |  |    --> DialogueLogger (bot)                                      | |
 |  |    --> transport.output()                                        | |
@@ -121,41 +122,35 @@ See [Desktop App Details](#desktop-app-details) below for platform notes and dis
 |                                                                       |
 |  Key components:                                                      |
 |  +------------------------+   +------------------------+              |
-|  | GeminiLiveLLMService   |   |LLMContextAggregatorPair|              |
-|  | - Native audio I/O     |   | - Captures assistant   |              |
-|  | - System instruction   |   |   messages to context  |              |
+|  | AzureRealtimeLLMService|   |LLMContextAggregatorPair|              |
+|  | - gpt-realtime-2.1     |   | - Captures user +      |              |
+|  | - System instruction   |   |   assistant messages   |              |
 |  |   from scenario        |   | - Used for feedback    |              |
-|  | - Voice: "Charon"      |   |   + transcript         |              |
-|  | - Language: DE         |   |                        |              |
+|  | - Voice: "marin"       |   |   + transcript         |              |
+|  | - In-session user STT  |   |                        |              |
 |  +------------------------+   +------------------------+              |
 |  +------------------------+   +------------------------+              |
 |  | AudioBufferProcessor   |   | DialogueLogger x2      |              |
 |  | - Records stereo WAV   |   | - Logs TranscriptionF. |              |
 |  |   (full conversation)  |   |   (user) + TTSTextF.   |              |
-|  | - Records user-only    |   |   (bot) to session log |              |
-|  |   WAV (for transcript) |   |                        |              |
+|  |                        |   |   (bot) to session log |              |
 |  +------------------------+   +------------------------+              |
 |                                                                       |
 |  EVENT FLOW:                                                          |
 |                                                                       |
 |  on_client_connected:                                                 |
 |    1. audio_buffer.start_recording()                                  |
-|    2. Inject opening_prompt as user message                           |
-|    3. Queue LLMRunFrame --> Gemini speaks first                       |
+|    2. Inject opening_prompt as developer message                      |
+|    3. Queue LLMRunFrame --> customer speaks first                     |
 |                                                                       |
 |  on_client_disconnected:                                              |
 |    1. audio_buffer.stop_recording()                                   |
 |    2. --> on_audio_data: save stereo WAV (full recording)             |
-|    3. --> on_track_audio_data: save user-only mono WAV                |
-|    4. Upload user WAV to Gemini Files API                             |
-|    5. Transcribe via Gemini Flash (text mode)                         |
-|    6. Delete uploaded file from Gemini                                |
-|    7. Interleave: zip bot context msgs + user transcription           |
-|    8. Save .transcript.txt                                            |
-|    9. generate_feedback() via Gemini Flash (text mode)                |
-|   10. Store result in feedback_store[pc_id]                           |
-|   11. Save .feedback.md                                               |
-|   12. task.cancel() -- pipeline teardown                              |
+|    3. format_transcript(context messages) --> save .transcript.txt    |
+|    4. generate_feedback() via Azure OpenAI gpt-5.6-terra              |
+|    5. Store result in feedback_store[pc_id]                           |
+|    6. Save .feedback.md                                               |
+|    7. task.cancel() -- pipeline teardown                              |
 |                                                                       |
 +----------------------------------+------------------------------------+
                                    |
@@ -163,9 +158,9 @@ See [Desktop App Details](#desktop-app-details) below for platform notes and dis
 +-----------------------------------------------------------------------+
 |  FEEDBACK (feedback.py)                                               |
 |                                                                       |
-|  Input:  scenario description + interleaved transcript                |
-|          (falls back to context messages if transcription unavailable)|
-|  Model:  Gemini 2.5 Flash (text mode)                                 |
+|  Input:  scenario description + transcript from context messages      |
+|          (user turns transcribed in-session by gpt-4o-transcribe)     |
+|  Model:  Azure OpenAI gpt-5.6-terra                                   |
 |  Output: Markdown -- "Was gut lief" / "Was besser werden kann" /      |
 |          "Schluesselmoment"                                           |
 |                                                                       |
@@ -174,7 +169,6 @@ See [Desktop App Details](#desktop-app-details) below for platform notes and dis
 Output files per session (in transcripts/):
   <timestamp>_<scenario>.log             -- raw dialogue log (audio stats, [USER], [BOT])
   <timestamp>_<scenario>.wav             -- stereo recording (both sides)
-  <timestamp>_<scenario>.user.wav        -- user-only mono recording
   <timestamp>_<scenario>.transcript.txt  -- interleaved text transcript
   <timestamp>_<scenario>.feedback.md     -- coaching feedback
 ```
@@ -231,5 +225,8 @@ To stop the server, quit the app from the Dock (macOS) or close the process. Tra
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) package manager
-- A [Google AI Studio](https://aistudio.google.com/) API key (free tier sufficient)
+- An Azure Foundry resource in an EU region (e.g. Sweden Central) with these Data Zone Standard deployments:
+  - `gpt-realtime-2.1` -- the live customer
+  - `gpt-5.6-terra` -- coaching feedback (`gpt-5.4` also works)
+  - `gpt-4o-transcribe` -- in-session transcription of the salesperson
 - A browser with microphone access (for the web version)

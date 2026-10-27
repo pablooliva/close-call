@@ -1,8 +1,8 @@
 """Pipecat pipeline for Close Call voice agent.
 
-Creates a GeminiLiveLLMService pipeline with scenario-specific system prompts,
-transcript collection via LLMContextAggregatorPair, and feedback generation
-on client disconnect.
+Creates an AzureRealtimeLLMService (gpt-realtime-2.1) pipeline with
+scenario-specific system prompts, transcript collection via
+LLMContextAggregatorPair, and feedback generation on client disconnect.
 """
 
 import asyncio
@@ -14,7 +14,6 @@ import wave
 from datetime import datetime
 from pathlib import Path
 
-import google.generativeai as genai
 from dotenv import load_dotenv
 
 from pipecat.frames.frames import (
@@ -26,21 +25,27 @@ from pipecat.frames.frames import (
 )
 from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
 from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair
 from pipecat.processors.frame_processor import FrameProcessor
-from pipecat.services.google.gemini_live.llm import (
-    GeminiLiveLLMService,
-    InputParams,
+from pipecat.services.azure.realtime.llm import AzureRealtimeLLMService
+from pipecat.services.openai.realtime.events import (
+    AudioConfiguration,
+    AudioInput,
+    AudioOutput,
+    InputAudioNoiseReduction,
+    InputAudioTranscription,
+    Reasoning,
+    SemanticTurnDetection,
+    SessionProperties,
 )
-from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import TransportParams
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pipecat.workers.runner import WorkerRunner
 
-from feedback import generate_feedback
+from feedback import format_transcript, generate_feedback
 from scenarios import SCENARIOS
 
 load_dotenv(override=True)
@@ -139,81 +144,6 @@ class DialogueLogger(FrameProcessor):
         await super().cleanup()
 
 
-async def transcribe_user_audio(wav_path: Path, bot_turns: list[str], dialogue_log: logging.Logger) -> str:
-    """Transcribe user audio using Gemini Flash with bot turns as context.
-
-    Uploads the user-only WAV to Gemini Files API and asks for a turn-by-turn
-    transcription, using the bot's known dialogue as anchoring context so Gemini
-    can split the salesperson's speech into matching turns.
-
-    Args:
-        wav_path: Path to the user-only mono WAV file.
-        bot_turns: List of the bot's (customer's) dialogue lines, in order.
-        dialogue_log: Per-session logger for transcript output.
-
-    Returns:
-        Full interleaved transcript string, or '' on failure.
-    """
-    if os.getenv("SKIP_TRANSCRIPTION", "").lower() == "true":
-        logger.info("SKIP_TRANSCRIPTION set — skipping transcription")
-        return ""
-
-    # Build the bot context for the prompt
-    bot_context = "\n".join(f"Kunde (Turn {i+1}): {line}" for i, line in enumerate(bot_turns))
-
-    audio_file = None
-    try:
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        audio_file = await asyncio.to_thread(
-            genai.upload_file, str(wav_path), mime_type="audio/wav"
-        )
-        logger.info("Uploaded WAV to Gemini Files API: %s", audio_file.name)
-        # Files API processes uploads asynchronously; wait for ACTIVE state
-        for _ in range(30):
-            if audio_file.state.name != "PROCESSING":
-                break
-            await asyncio.sleep(0.5)
-            audio_file = await asyncio.to_thread(genai.get_file, audio_file.name)
-        else:
-            raise RuntimeError("Gemini file still PROCESSING after 15s — giving up")
-
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = await model.generate_content_async([
-            "This audio contains ONLY the salesperson's (Verkäufer) side of a phone conversation. "
-            "The other side (the customer/Kunde) is NOT in the audio but I have their transcript below.\n\n"
-            "The conversation alternates: the customer speaks first, then the salesperson responds, "
-            "then the customer again, and so on.\n\n"
-            f"CUSTOMER'S KNOWN DIALOGUE (for context — NOT in the audio):\n{bot_context}\n\n"
-            "TASK: Transcribe the salesperson's audio and produce the FULL interleaved dialogue. "
-            "Output format — one line per turn, alternating:\n"
-            "Kunde: <customer's known text>\n"
-            "Verkäufer: <transcribed salesperson text>\n"
-            "Kunde: <customer's known text>\n"
-            "Verkäufer: <transcribed salesperson text>\n"
-            "...and so on.\n\n"
-            "Rules:\n"
-            "- Use the customer lines EXACTLY as provided above\n"
-            "- Transcribe the salesperson's speech accurately, splitting at the natural turn boundaries\n"
-            "- If the salesperson spoke in a different language than the customer, transcribe in the language they actually used\n"
-            "- Output ONLY the dialogue lines, no explanations or commentary",
-            audio_file,
-        ])
-        transcript = response.text.strip()
-        dialogue_log.info("[TRANSCRIPT]\n%s", transcript)
-        logger.info("Transcription complete (%d chars)", len(transcript))
-        return transcript
-    except Exception as e:
-        logger.warning("Transcription failed: %s", e)
-        return ""
-    finally:
-        if audio_file is not None:
-            try:
-                await asyncio.to_thread(genai.delete_file, audio_file.name)
-                logger.info("Deleted uploaded audio from Gemini Files API")
-            except Exception as e:
-                logger.warning("Failed to delete Gemini file: %s", e)
-
-
 async def run_bot(
     connection: SmallWebRTCConnection,
     scenario_id: str,
@@ -254,14 +184,32 @@ async def _run_bot_pipeline(
     dialogue_log.info("")
     logger.info("Transcript will be saved to %s", transcript_path)
 
-    # REQ-003: Scenario-specific AI persona via system_instruction
-    llm = GeminiLiveLLMService(
-        api_key=os.getenv("GOOGLE_API_KEY"),
-        system_instruction=scenario["system_prompt"],
-        voice_id="Charon",
-        model="models/gemini-2.5-flash-native-audio-preview-12-2025",
-        params=InputParams(
-            language=Language.DE,
+    # REQ-003: Scenario-specific AI persona via system_instruction.
+    # Settings.model is the Azure *deployment* name, appended to the URL as ?model=.
+    # In-session transcription puts the salesperson's speech into the context as
+    # user messages (replaces the post-call transcription from SPEC-002).
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
+    llm = AzureRealtimeLLMService(
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        base_url=endpoint.replace("https://", "wss://", 1) + "/openai/v1/realtime",
+        settings=AzureRealtimeLLMService.Settings(
+            model=os.getenv("AZURE_REALTIME_DEPLOYMENT", "gpt-realtime-2.1"),
+            system_instruction=scenario["system_prompt"],
+            session_properties=SessionProperties(
+                audio=AudioConfiguration(
+                    input=AudioInput(
+                        transcription=InputAudioTranscription(
+                            model=os.getenv("AZURE_TRANSCRIBE_MODEL", "gpt-4o-transcribe"),
+                            language="de",
+                        ),
+                        noise_reduction=InputAudioNoiseReduction(type="near_field"),
+                        # Low eagerness: let salespeople pause mid-pitch without the customer cutting in
+                        turn_detection=SemanticTurnDetection(eagerness="low"),
+                    ),
+                    output=AudioOutput(voice="marin"),
+                ),
+                reasoning=Reasoning(effort="low"),
+            ),
         ),
     )
 
@@ -280,18 +228,15 @@ async def _run_bot_pipeline(
     user_log = DialogueLogger(session_logger=dialogue_log)
     bot_log = DialogueLogger(session_logger=dialogue_log)
 
-    # REQ-001/REQ-006: Capture audio at 16kHz; on_track_audio_data gives us clean
-    # separate user/bot buffers so no diarization is needed for transcription.
+    # REQ-001: Capture audio at 16kHz as a stereo recording (user and bot on separate channels)
     audio_buffer = AudioBufferProcessor(
         sample_rate=16000,
-        num_channels=2,       # Required for on_track_audio_data to populate both buffers
+        num_channels=2,
         buffer_size=0,        # Only flush on stop_recording()
         enable_turn_audio=False,
     )
 
-    # Shares WAV path between on_track_audio_data and disconnect handler.
-    # wav_ready signals when the handler has finished writing.
-    wav_path_holder = {"path": None}
+    # Signals the disconnect handler when the WAV has been written
     wav_ready = asyncio.Event()
 
     @audio_buffer.event_handler("on_audio_data")
@@ -309,23 +254,6 @@ async def _run_bot_pipeline(
             logger.info("Stereo WAV saved to %s", wav_path)
         except Exception as e:
             logger.error("Failed to save stereo WAV: %s", e)
-
-    @audio_buffer.event_handler("on_track_audio_data")
-    async def on_track_audio_data(processor, user_audio, bot_audio, sample_rate, num_channels):
-        # Save user-only mono WAV for transcription
-        user_wav_path = transcript_path.with_suffix(".user.wav")
-        def _write():
-            with wave.open(str(user_wav_path), "wb") as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)
-                wf.setframerate(sample_rate)
-                wf.writeframes(user_audio)
-        try:
-            await asyncio.to_thread(_write)
-            wav_path_holder["path"] = user_wav_path
-            logger.info("User WAV saved to %s", user_wav_path)
-        except Exception as e:
-            logger.error("Failed to save user WAV: %s", e)
         finally:
             wav_ready.set()
 
@@ -340,23 +268,22 @@ async def _run_bot_pipeline(
         assistant_aggregator,
     ])
 
-    task = PipelineTask(
+    task = PipelineWorker(
         pipeline,
         params=PipelineParams(
-            allow_interruptions=True,
             enable_metrics=True,
             enable_usage_metrics=True,
         ),
     )
 
     # REQ-004: AI initiates conversation on client connect.
-    # send_client_content is required for reliable audio output from Gemini native audio.
-    # Without it, Gemini generates text transcription but drops audio bytes partway through.
+    # The trigger is a developer message so format_transcript() keeps it out of the
+    # feedback transcript; the realtime adapter sends it to the model as a user item.
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
         await audio_buffer.start_recording()  # REQ-009: explicit start required (_recording=False at init)
         context.add_message({
-            "role": "user",
+            "role": "developer",
             "content": scenario["opening_prompt"],
         })
         await task.queue_frames([LLMRunFrame()])
@@ -378,32 +305,22 @@ async def _run_bot_pipeline(
         }
 
         try:
-            await audio_buffer.stop_recording()  # triggers on_audio_data + on_track_audio_data
+            await audio_buffer.stop_recording()  # triggers on_audio_data
             try:
                 await asyncio.wait_for(wav_ready.wait(), timeout=30.0)
             except asyncio.TimeoutError:
-                logger.warning("Timed out waiting for WAV file — skipping transcription")
+                logger.warning("Timed out waiting for WAV file")
 
+            # Salesperson turns arrive as user messages via in-session transcription
             messages = context.get_messages()
-            wav_path = wav_path_holder["path"]
-
-            # Extract bot turns for use as transcription context
-            bot_turns = [
-                m["content"] for m in messages
-                if m.get("role") == "assistant" and m.get("content")
-            ]
-
-            # Transcribe user audio with bot turns as anchoring context
-            combined_transcript = ""
-            if wav_path and wav_path.exists():
-                combined_transcript = await transcribe_user_audio(wav_path, bot_turns, dialogue_log)
-
-            if combined_transcript:
+            transcript = format_transcript(messages)
+            if transcript:
+                dialogue_log.info("[TRANSCRIPT]\n%s", transcript)
                 transcript_file = transcript_path.with_suffix(".transcript.txt")
-                transcript_file.write_text(combined_transcript, encoding="utf-8")
+                transcript_file.write_text(transcript, encoding="utf-8")
                 logger.info("Transcript saved to %s", transcript_file)
 
-            feedback = await generate_feedback(scenario, messages, transcript_text=combined_transcript)
+            feedback = await generate_feedback(scenario, messages)
             feedback_store[pc_id] = {
                 "status": "ready",
                 "feedback": feedback,
@@ -425,5 +342,6 @@ async def _run_bot_pipeline(
 
         await task.cancel()  # REQ-008: LAST — after stop_recording() and all async work
 
-    runner = PipelineRunner(handle_sigint=False)
-    await runner.run(task)
+    runner = WorkerRunner(handle_sigint=False)
+    await runner.add_workers(task)
+    await runner.run()

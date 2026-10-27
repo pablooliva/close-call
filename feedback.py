@@ -1,13 +1,13 @@
-"""Post-call coaching feedback generation via Gemini 2.5 Flash (text mode).
+"""Post-call coaching feedback generation via Azure OpenAI (gpt-5.6-terra).
 
-Formats the collected transcript and sends it to Gemini for structured
-sales coaching analysis. Handles empty/short transcripts gracefully.
+Formats the collected transcript and sends it to the Azure text model for
+structured sales coaching analysis. Handles empty/short transcripts gracefully.
 """
 
 import logging
 import os
 
-import google.generativeai as genai
+from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -98,15 +98,23 @@ async def generate_feedback(
             transcript += "\n\n(Hinweis: Sehr kurzes Gespr\u00e4ch)"
 
     try:
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = await model.generate_content_async(
-            COACHING_PROMPT.format(
-                scenario_description=scenario["description"],
-                transcript=transcript,
-            )
+        # Azure's /openai/v1/ surface is OpenAI-compatible; model is the deployment name
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
+        client = AsyncOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            base_url=f"{endpoint}/openai/v1/",
         )
-        return response.text
+        response = await client.chat.completions.create(
+            model=os.getenv("AZURE_FEEDBACK_DEPLOYMENT", "gpt-5.6-terra"),
+            messages=[{
+                "role": "user",
+                "content": COACHING_PROMPT.format(
+                    scenario_description=scenario["description"],
+                    transcript=transcript,
+                ),
+            }],
+        )
+        return response.choices[0].message.content
     except Exception:
         logger.exception("Feedback generation failed")
         # FAIL-002: Raise so caller can set error status in feedback_store

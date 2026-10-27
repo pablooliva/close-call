@@ -1,5 +1,5 @@
-pipecat-ai[google,webrtc]==0.0.107
+pipecat-ai[azure,webrtc]==1.14.0
 python-dotenv
-google-generativeai
+openai
 fastapi
 uvicorn[standard]

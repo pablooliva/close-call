@@ -2,21 +2,22 @@
 
 ## What This Is
 
-A PoC voice agent that lets Memodo salespeople practice German-language solar sales scenarios against an AI mock customer. Built with Pipecat + Gemini 2.5 Flash native audio.
+A PoC voice agent that lets Memodo salespeople practice German-language solar sales scenarios against an AI mock customer. Built with Pipecat + Azure OpenAI `gpt-realtime-2.1` (speech-to-speech).
 
 ## Stack
 
-- **Framework:** Pipecat v0.0.107 (pinned)
-- **Voice AI:** Gemini 2.5 Flash native audio (`models/gemini-2.5-flash-native-audio-preview-12-2025`)
+- **Framework:** Pipecat v1.14.0 (pinned)
+- **Voice AI:** Azure OpenAI `gpt-realtime-2.1` via `AzureRealtimeLLMService` (Data Zone Standard EU deployment, Sweden Central)
+- **User transcription:** in-session via `gpt-4o-transcribe` (salesperson turns land in the context as `user` messages)
 - **Transport:** WebRTC via `SmallWebRTCTransport` (STUN-only, localhost)
 - **Server:** FastAPI + uvicorn (single worker)
 - **Frontend:** Vanilla HTML/JS, no build step
-- **Feedback:** Gemini 2.5 Flash text mode via `google-generativeai` SDK
+- **Feedback:** Azure OpenAI `gpt-5.6-terra` via the `openai` SDK against Azure's OpenAI-compatible `/openai/v1/` endpoint
 
 ## How to Run
 
 ```bash
-cp .env.example .env   # Add your GOOGLE_API_KEY
+cp .env.example .env   # Add AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY
 uv sync                # Install dependencies from pyproject.toml
 uv run python server.py  # Starts on http://localhost:7860
 ```
@@ -41,29 +42,27 @@ Dependencies are defined in `pyproject.toml`, not `requirements.txt`. The `requi
 | `bot.py` | Pipecat pipeline: voice AI, transcript collection, feedback trigger |
 | `scenarios.py` | Scenario loader — reads .md files from `scenarios/` |
 | `scenarios/*.md` | Scenario definitions (one per file, YAML frontmatter + markdown body) |
-| `feedback.py` | Post-call coaching generation via Gemini text API |
+| `feedback.py` | Post-call coaching generation via Azure OpenAI text API |
 | `static/index.html` | Single-page frontend (scenario picker, call UI, feedback display) |
 
 ## Critical: Do NOT Use PROJECT.md Code Snippets Directly
 
-PROJECT.md (written 2026-04-04) contains code snippets that use the WRONG API surface for pipecat-ai 0.0.107:
-
-- PROJECT.md uses `GeminiLiveLLMService.Settings(model=..., voice=..., system_instruction=...)` -- WRONG
-- Correct API: `GeminiLiveLLMService(api_key=..., system_instruction=..., voice_id=..., model=..., settings=InputParams(...))`
-- `system_instruction`, `voice_id`, and `model` are constructor parameters, NOT inside Settings/InputParams
-- Use `SPEC-001-build-poc.md` in `SDD/requirements/` as the authoritative implementation reference
+PROJECT.md (written 2026-04-04) and SPEC-001/SPEC-002 describe the original Gemini implementation. The project moved to Azure OpenAI on Pipecat 1.14 (see `SDD/research/RESEARCH-003-model-provider-alternatives.md`); treat `bot.py` as the reference for the current API surface.
 
 ## Key Pipecat Patterns
 
 - Import from `pipecat.transports.smallwebrtc.*` (NOT the deprecated `pipecat.transports.network.small_webrtc`)
 - Use `SmallWebRTCRequestHandler` for signaling (mirrors Pipecat's built-in runner)
-- Use `send_client_content` with `role='user'` for initial bot greeting trigger (required for reliable audio output from Gemini native audio). Scene context goes in the `system_instruction` as a `SZENE:` block; the `opening_prompt` is a short trigger sent via `send_client_content`.
+- Scene context goes in the `system_instruction` as a `SZENE:` block; the `opening_prompt` is a short trigger added as a `developer` message before `LLMRunFrame`. Keep it `developer`: `format_transcript()` drops that role, so the trigger stays out of the feedback transcript (the realtime adapter still sends it to the model as a user item).
+- `AzureRealtimeLLMService` needs the `/openai/v1/realtime` URL. URLs with `api-version=` select Azure's preview protocol, which Pipecat no longer speaks. `Settings.model` is the Azure *deployment* name.
+- Passing `session_properties` replaces Pipecat's defaults wholesale — set every session option you rely on.
+- Pipecat 1.x renamed `PipelineTask`/`PipelineRunner` to `PipelineWorker`/`WorkerRunner` (register with `add_workers()` before `run()`). The old names are deprecated aliases until 2.0.
 - **Do NOT create a data channel** from the frontend (`createDataChannel`) — it changes the SDP negotiation and breaks audio output. The SmallWebRTC transport handles data channel warnings gracefully without one.
-- `LLMContextAggregatorPair` captures both user and assistant speech as text
-- Gemini Live produces transcripts by default (`AudioTranscriptionConfig` enabled), but user input transcription is unreliable with the native audio preview model (see `SDD/research/RESEARCH-002-user-speech-transcription.md`)
+- `LLMContextAggregatorPair` captures both user and assistant speech as text. In realtime mode a user turn is written to the context when the bot starts answering, so a salesperson's final words right before hang-up may be missing from the transcript.
 
 ## Known Constraints
 
 - **Single uvicorn worker only.** Feedback delivery uses a module-level dict. Multiple workers break feedback silently.
 - **Localhost only.** No HTTPS, no TURN server, no auth. STUN-only WebRTC.
 - **No persistence.** All data is in-memory per session.
+- **EU processing only.** Azure deployments must be Data Zone Standard (EU). `gpt-realtime-2.1-mini` and `gpt-realtime-2` are Global-only — don't switch to them without revisiting GDPR.
