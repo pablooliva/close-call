@@ -26,12 +26,13 @@ elif not _proxy_cert:
     os.environ["SSL_CERT_FILE"] = certifi.where()
 
 import logging
+import re
 import secrets
 import time
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Cookie, FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -242,6 +243,17 @@ async def get_feedback(pc_id: str, session: str | None = Cookie(default=None)):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+LOGOUT_BLOCK = re.compile(r"<!-- logout:start.*?<!-- logout:end -->\n?", re.S)
+
+
+def serve_page(path: str):
+    """Serve a static page. The desktop app has no login, so drop its logout button."""
+    if not DESKTOP_MODE:
+        return FileResponse(path)
+    with open(path, encoding="utf-8") as f:
+        return HTMLResponse(LOGOUT_BLOCK.sub("", f.read()))
+
+
 @app.get("/login")
 async def login_page(session: str | None = Cookie(default=None)):
     """Serve login page, or redirect to landing if already authenticated."""
@@ -255,7 +267,7 @@ async def index(session: str | None = Cookie(default=None)):
     """Serve landing page (requires auth)."""
     if not is_authenticated(session):
         return RedirectResponse(url="/login")
-    return FileResponse("static/landing.html")
+    return serve_page("static/landing.html")
 
 
 @app.get("/call")
@@ -263,7 +275,7 @@ async def call_page(session: str | None = Cookie(default=None)):
     """Serve the call/scenario selection page (requires auth)."""
     if not is_authenticated(session):
         return RedirectResponse(url="/login")
-    return FileResponse("static/index.html")
+    return serve_page("static/index.html")
 
 
 # --- Entry Point ---

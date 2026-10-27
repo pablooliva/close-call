@@ -12,11 +12,13 @@ on:
   push:
     tags: ["v*"]
     branches: ["**"]
-    # Branch pushes build only when packaging could break (not evaluated for tags)
+    # Branch pushes build when anything shipped in the app changes, not for
+    # docs-only commits (not evaluated for tags)
     paths:
       - "electron/**"
-      - "desktop.py"
-      - "build_desktop.py"
+      - "**/*.py"
+      - "static/**"
+      - "scenarios/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".github/workflows/desktop.yml"
