@@ -30,6 +30,8 @@
         "dmg"
       ],
       "category": "public.app-category.business",
+      "identity": "-",
+      "hardenedRuntime": false,
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Close Call braucht das Mikrofon für die Übungsgespräche."
       }

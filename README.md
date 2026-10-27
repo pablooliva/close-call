@@ -205,7 +205,7 @@ Transcripts, recordings and feedback: `transcripts/` in the app-data folder abov
 
 The builds are not code-signed yet.
 
-- **macOS:** open the DMG and drag `Close Call` into Applications. Before the first start, run `xattr -cr "/Applications/Close Call.app"` in Terminal; otherwise Gatekeeper reports the app as damaged.
+- **macOS:** open the DMG and drag `Close Call` into Applications. The app is ad-hoc signed but not notarized, so the first start shows "Apple could not verify…". Click *Done*, then open *System Settings > Privacy & Security* and click *Open Anyway* next to Close Call. (Terminal alternative: `xattr -cr "/Applications/Close Call.app"`.)
 - **Windows:** run `Close Call Setup <version>.exe`. It installs per user (no admin rights). SmartScreen warns about an unknown publisher: *More info* > *Run anyway*. Managed laptops may block unsigned installers entirely.
 
 The microphone permission is requested on first start (macOS) or first call.

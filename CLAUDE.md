@@ -70,6 +70,7 @@ PROJECT.md (written 2026-04-04) and SPEC-001/SPEC-002 describe the original Gemi
 ## Desktop App Rules
 
 - The sidecar gets its config from Electron via env: `PORT`, `CLOSECALL_ENV_FILE` (user's `.env` in app data), `CLOSECALL_DATA_DIR` (writable folder; the install dir may be read-only), `CLOSECALL_SIDECAR=1` (exit when stdin closes, so the server never outlives a crashed app). Keep the sidecar a console build (not `--windowed`): windowed Windows builds have no stdin.
+- macOS builds are ad-hoc signed (`mac.identity: "-"`, `hardenedRuntime: false`). Without it the bundle keeps Electron's stale signature and Gatekeeper calls downloaded copies "damaged" with no override. Switch to a real identity + hardened runtime + notarization once a certificate exists.
 - **Never bundle a `.env` in CI builds.** The repo is public and workflow artifacts are downloadable; `build_desktop.py` only bundles `.env` when one exists locally.
 - New Python modules imported dynamically must be added to `build_desktop.py` (`--collect-submodules`), or the packaged app fails at runtime while `uv run` works.
 
