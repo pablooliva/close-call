@@ -1,24 +1,32 @@
-"""Build script for creating a standalone Close Call desktop app with PyInstaller.
+"""Build the Close Call server sidecar with PyInstaller.
 
 Usage:
     uv run python build_desktop.py
 
-This produces a single-folder distribution in dist/CloseCall/ containing
-the executable plus all required data files.
+This produces a single-folder distribution in dist/closecall-server/ that the
+Electron app (electron/) bundles and starts. Must be run on each target
+platform: PyInstaller cannot cross-compile.
+
+A local .env is bundled when present (handy for builds you hand out yourself).
+CI builds have none: the repo is public, so its installers must not contain the
+Azure key; users put their .env in the app-data folder instead.
 """
 
+import os
+
 import PyInstaller.__main__
-import sys
+
+# Console app (not --windowed): Electron hides the window and needs stdin.
+env_data = ["--add-data=.env:."] if os.path.exists(".env") else []
 
 PyInstaller.__main__.run([
     "desktop.py",
-    "--name=CloseCall",
-    "--windowed",                    # Produce .app bundle on macOS, no console window
+    "--name=closecall-server",
     "--noconfirm",                   # Overwrite previous build without asking
     # Bundle data directories
     "--add-data=static:static",
     "--add-data=scenarios:scenarios",
-    "--add-data=.env:.",
+    *env_data,
     # Hidden imports that PyInstaller may miss
     "--hidden-import=uvicorn.logging",
     "--hidden-import=uvicorn.loops",

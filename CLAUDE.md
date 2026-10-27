@@ -12,6 +12,7 @@ A PoC voice agent that lets Memodo salespeople practice German-language solar sa
 - **Transport:** WebRTC via `SmallWebRTCTransport` (STUN-only, localhost)
 - **Server:** FastAPI + uvicorn (single worker)
 - **Frontend:** Vanilla HTML/JS, no build step
+- **Desktop app:** Electron 45 shell (`electron/`, plain JS) around the PyInstaller-built server, Windows + macOS ([ADR 0001](SDD/adr/0001-electron-shell-with-python-sidecar.md))
 - **Feedback:** Azure OpenAI `gpt-5.6-terra` via the `openai` SDK against Azure's OpenAI-compatible `/openai/v1/` endpoint
 
 ## How to Run
@@ -21,6 +22,8 @@ cp .env.example .env   # Add AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY
 uv sync                # Install dependencies from pyproject.toml
 uv run python server.py  # Starts on http://localhost:7860
 ```
+
+Desktop app: `uv run python build_desktop.py` (sidecar → `dist/closecall-server/`), then `cd electron && npx electron-builder --publish never` (installer → `electron/dist/`). Dev: `cd electron && npm start` runs `desktop.py` from source. Builds only for the current platform; the `Desktop build` workflow builds Mac + Windows.
 
 ## Package Management
 
@@ -44,6 +47,9 @@ Dependencies are defined in `pyproject.toml`, not `requirements.txt`. The `requi
 | `scenarios/*.md` | Scenario definitions (one per file, YAML frontmatter + markdown body) |
 | `feedback.py` | Post-call coaching generation via Azure OpenAI text API |
 | `static/index.html` | Single-page frontend (scenario picker, call UI, feedback display) |
+| `desktop.py` | Headless server entry for the desktop app (the Electron "sidecar") |
+| `build_desktop.py` | PyInstaller build of the sidecar |
+| `electron/main.js` | Electron shell: starts the sidecar on a free port, shows the frontend, stops it on quit |
 
 ## Critical: Do NOT Use PROJECT.md Code Snippets Directly
 
@@ -60,6 +66,12 @@ PROJECT.md (written 2026-04-04) and SPEC-001/SPEC-002 describe the original Gemi
 - Pipecat 1.x renamed `PipelineTask`/`PipelineRunner` to `PipelineWorker`/`WorkerRunner` (register with `add_workers()` before `run()`). The old names are deprecated aliases until 2.0.
 - **Do NOT create a data channel** from the frontend (`createDataChannel`) — it changes the SDP negotiation and breaks audio output. The SmallWebRTC transport handles data channel warnings gracefully without one.
 - `LLMContextAggregatorPair` captures both user and assistant speech as text. In realtime mode a user turn is written to the context when the bot starts answering, so a salesperson's final words right before hang-up may be missing from the transcript.
+
+## Desktop App Rules
+
+- The sidecar gets its config from Electron via env: `PORT`, `CLOSECALL_ENV_FILE` (user's `.env` in app data), `CLOSECALL_DATA_DIR` (writable folder; the install dir may be read-only), `CLOSECALL_SIDECAR=1` (exit when stdin closes, so the server never outlives a crashed app). Keep the sidecar a console build (not `--windowed`): windowed Windows builds have no stdin.
+- **Never bundle a `.env` in CI builds.** The repo is public and workflow artifacts are downloadable; `build_desktop.py` only bundles `.env` when one exists locally.
+- New Python modules imported dynamically must be added to `build_desktop.py` (`--collect-submodules`), or the packaged app fails at runtime while `uv run` works.
 
 ## Known Constraints
 

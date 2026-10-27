@@ -34,18 +34,19 @@ docker compose up --build
 # Open http://localhost:7860
 ```
 
-## Desktop App
+## Desktop App (Windows + macOS)
 
-For non-technical users: package Close Call as a standalone executable. Users double-click to start -- no Python, no terminal, no setup.
+For non-technical users: an installable Electron app with the Python server bundled inside. No Python, no terminal, no browser needed. See [ADR 0001](SDD/adr/0001-electron-shell-with-python-sidecar.md) for why Electron.
 
 ```bash
-# Make sure .env has your Azure credentials (they get baked into the build)
-uv run python build_desktop.py
+uv run python build_desktop.py          # 1. Python server -> dist/closecall-server/
+cd electron && npm ci                   # 2. Electron + electron-builder (once)
+npx electron-builder --publish never    # 3. Installer -> electron/dist/
 ```
 
-Output lands in `dist/` (~690MB). Distribute the `CloseCall/` folder (or `CloseCall.app` on macOS). The user double-clicks it, the server starts locally, and their browser opens to the app.
+Builds must run on the target platform (a Mac builds the DMG, Windows builds the `.exe` installer). The **Desktop build** GitHub Actions workflow builds both; run it manually or push a `v*` tag.
 
-See [Desktop App Details](#desktop-app-details) below for platform notes and distribution tips.
+See [Desktop App Details](#desktop-app-details) below for the API key, distribution and platform notes.
 
 ## What It Does
 
@@ -175,51 +176,44 @@ Output files per session (in transcripts/):
 
 ## Desktop App Details
 
-### Build Output
+### How It Works
 
-`uv run python build_desktop.py` produces two outputs in `dist/`:
-- `CloseCall/` -- a folder with the executable and supporting files
-- `CloseCall.app` -- a macOS app bundle (on macOS)
+`electron/main.js` picks a free localhost port, starts the bundled Python server (`desktop.py`, built by PyInstaller as `closecall-server`), waits until it answers and shows the frontend in the app window. Quitting the app stops the server; if the app crashes, the server exits on its own.
 
-Build time is roughly 1-2 minutes.
-
-### Distributing
-
-On macOS, package the app as a DMG for safe distribution (avoids corruption from cloud storage services like Proton Drive, Google Drive, etc. that mishandle `.app` bundles):
+### Development
 
 ```bash
-./create_dmg.sh
-# Output: dist/CloseCall.dmg
+cd electron && npm ci && npm start      # runs desktop.py from source via uv
 ```
 
-Alternatively, send the user:
-- The `dist/CloseCall/` folder (zip it up), or
-- The `dist/CloseCall.app` bundle on macOS
+### The Azure API Key
 
-The `.env` with your API key is baked into the build -- users don't need to configure anything. If a user needs a different API key, they can place a `.env` file next to the executable to override the bundled one.
+The app reads its `.env` from two places (the second wins):
 
-### Installing from DMG
+1. A `.env` bundled at build time -- only if one exists in the repo root when you run `build_desktop.py`. Handy for builds you hand out yourself.
+2. A `.env` in the user's app-data folder:
+   - macOS: `~/Library/Application Support/Close Call/.env`
+   - Windows: `%APPDATA%\Close Call\.env`
 
-After downloading `CloseCall.dmg`, double-click it to mount the disk image. Drag `CloseCall.app` into your `/Applications` folder. Before running it, open Terminal and remove the quarantine flag (required because the app is unsigned):
+**Installers built by GitHub Actions contain no key** (the repo is public and workflow artifacts are downloadable), so their users need option 2. Either way, every installed copy holds the key -- treat it as shared with every user.
 
-```bash
-xattr -cr /Applications/CloseCall.app
-```
+### Where Data Goes
 
-Without this step, macOS Gatekeeper will report the app as "damaged" and refuse to open it.
+Transcripts, recordings and feedback: `transcripts/` in the app-data folder above. Server log (for support): `logs/server.log` in the same folder.
 
-### Running
+### Installing (unsigned builds)
 
-Double-click `CloseCall.app` from `/Applications` (or wherever you placed it). The server starts in the background and the default browser opens to the landing page. WebRTC connects locally -- no network latency issues.
+The builds are not code-signed yet.
 
-To stop the server, quit the app from the Dock (macOS) or close the process. Transcripts and feedback are saved to a `transcripts/` folder next to the executable.
+- **macOS:** open the DMG and drag `Close Call` into Applications. Before the first start, run `xattr -cr "/Applications/Close Call.app"` in Terminal; otherwise Gatekeeper reports the app as damaged.
+- **Windows:** run `Close Call Setup <version>.exe`. It installs per user (no admin rights). SmartScreen warns about an unknown publisher: *More info* > *Run anyway*. Managed laptops may block unsigned installers entirely.
+
+The microphone permission is requested on first start (macOS) or first call.
 
 ### Platform Notes
 
-- You must build on each target platform (a macOS build won't run on Windows and vice versa). Use CI with platform-specific runners to automate this.
-- **macOS:** Unsigned apps trigger a Gatekeeper warning. Users can right-click > Open to bypass it, or you can sign/notarize with an Apple Developer account ($99/year).
-- **Windows:** Unsigned `.exe` files trigger a SmartScreen warning. A code signing certificate removes it.
-- The browser will prompt for **microphone permission** on first use.
+- Mac builds target the build machine's architecture (Apple Silicon on GitHub's `macos-latest`). Intel Macs need a separate build on an Intel machine.
+- Signing removes the warnings above and enables auto-update later: an Apple Developer account for macOS, a code-signing service for Windows.
 
 ## Requirements
 

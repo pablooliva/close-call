@@ -1,0 +1,62 @@
+# Builds the Electron desktop app (ADR 0001) on native runners: PyInstaller
+# cannot cross-compile, so each platform builds its own Python sidecar.
+#
+# No secrets are used: the repo is public and workflow artifacts are
+# downloadable, so the installers must not contain the Azure key. Users put
+# their .env in the app-data folder (see README).
+
+name: Desktop build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+    branches: ["**"]
+    # Branch pushes build only when packaging could break (not evaluated for tags)
+    paths:
+      - "electron/**"
+      - "desktop.py"
+      - "build_desktop.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/desktop.yml"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+
+      - name: Build Python sidecar
+        run: |
+          uv sync --frozen
+          uv run python build_desktop.py
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Build installer
+        working-directory: electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"  # unsigned until certificates exist
+        run: |
+          npm ci
+          npx electron-builder --publish never
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: close-call-${{ runner.os }}
+          path: |
+            electron/dist/*.dmg
+            electron/dist/*.exe
+          if-no-files-found: error

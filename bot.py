@@ -53,8 +53,11 @@ load_dotenv(override=True)
 logger = logging.getLogger(__name__)
 
 def _get_transcripts_dir() -> Path:
-    """Return the transcripts directory. When running as a PyInstaller bundle,
-    write next to the executable instead of inside the temp _MEIPASS dir."""
+    """Return the transcripts directory. The Electron app passes a writable
+    CLOSECALL_DATA_DIR; other bundles write next to the executable instead of
+    inside the temp _MEIPASS dir."""
+    if os.environ.get("CLOSECALL_DATA_DIR"):
+        return Path(os.environ["CLOSECALL_DATA_DIR"]) / "transcripts"
     if getattr(sys, "frozen", False):
         return Path(os.path.dirname(sys.executable)) / "transcripts"
     return Path(__file__).parent / "transcripts"

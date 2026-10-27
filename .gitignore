@@ -9,3 +9,4 @@ Close Call.url
 build/
 dist/
 *.spec
+node_modules/

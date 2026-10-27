@@ -1,0 +1,47 @@
+{
+  "name": "close-call",
+  "productName": "Close Call",
+  "version": "0.1.0",
+  "description": "AI voice agent for practicing German-language solar sales conversations",
+  "author": "Memodo",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never"
+  },
+  "build": {
+    "appId": "de.memodo.closecall",
+    "productName": "Close Call",
+    "files": [
+      "main.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../dist/closecall-server",
+        "to": "server"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.business",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Close Call braucht das Mikrofon für die Übungsgespräche."
+      }
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  }
+}
