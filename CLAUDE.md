@@ -54,6 +54,7 @@ PROJECT.md (written 2026-04-04) and SPEC-001/SPEC-002 describe the original Gemi
 - Import from `pipecat.transports.smallwebrtc.*` (NOT the deprecated `pipecat.transports.network.small_webrtc`)
 - Use `SmallWebRTCRequestHandler` for signaling (mirrors Pipecat's built-in runner)
 - Scene context goes in the `system_instruction` as a `SZENE:` block; the `opening_prompt` is a short trigger added as a `developer` message before `LLMRunFrame`. Keep it `developer`: `format_transcript()` drops that role, so the trigger stays out of the feedback transcript (the realtime adapter still sends it to the model as a user item).
+- Reply length, spoken register, no-reciting and no-volunteering-hidden-motives rules live in `scenarios.CONVERSATION_STYLE`, appended to every scenario. gpt-realtime-2.1 follows prompts literally, so don't add conflicting per-scenario style rules.
 - `AzureRealtimeLLMService` needs the `/openai/v1/realtime` URL. URLs with `api-version=` select Azure's preview protocol, which Pipecat no longer speaks. `Settings.model` is the Azure *deployment* name.
 - Passing `session_properties` replaces Pipecat's defaults wholesale — set every session option you rely on.
 - Pipecat 1.x renamed `PipelineTask`/`PipelineRunner` to `PipelineWorker`/`WorkerRunner` (register with `add_workers()` before `run()`). The old names are deprecated aliases until 2.0.

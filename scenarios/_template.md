@@ -19,3 +19,7 @@ Include:
 - Hidden motivations or pain points
 - Language/tone guidance
 - A SZENE: block describing the call setup
+
+Don't add rules for reply length or conversational style: scenarios.py appends a
+shared CONVERSATION_STYLE block to every scenario. Quoted lines are treated as tone
+examples, not lines to recite.

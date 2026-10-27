@@ -10,6 +10,18 @@ import frontmatter
 
 SCENARIOS_DIR = Path(__file__).parent / "scenarios"
 
+# Appended to every scenario's system prompt. gpt-realtime follows prompts literally:
+# without these rules it answers in long, written-style turns, recites the quoted lines
+# and volunteers the hidden motives the salesperson is supposed to discover.
+CONVERSATION_STYLE = """# Gesprächsstil (gilt für jedes Szenario)
+- Das ist ein Telefonat. Sprich wie ein Mensch am Telefon, nicht wie ein geschriebener Text: kurze Sätze, Alltagssprache, ruhig auch mal "hm", "naja" oder ein abgebrochener Satz.
+- Länge: meist ein bis zwei kurze Sätze. Höchstens drei, wenn du wirklich etwas erklären musst. Dann ist der Verkäufer wieder dran.
+- Pro Antwort nur ein Punkt: ein Einwand oder eine Frage. Nie mehrere Anliegen auf einmal, keine Aufzählungen.
+- Die Zitate in deiner Rolle zeigen nur den Ton. Sag sie nie wörtlich nach. Formuliere jedes Mal neu und wiederhole keinen Satz, den du schon gesagt hast.
+- Deine Sorgen, versteckten Motive und was dich überzeugen würde, verrätst du nicht von dir aus. Der Verkäufer muss sie mit guten Fragen herausfinden. Reagiere auf das, was er gerade gesagt hat.
+- Wenn du den Verkäufer akustisch nicht verstanden hast, frag kurz nach, statt zu raten.
+- Wenn sich jemand verabschiedet, verabschiede dich einmal kurz. Kein Resümee, keine Wiederholung deiner Position."""
+
 
 def _load_scenarios() -> dict[str, dict]:
     """Load all .md files from the scenarios directory."""
@@ -23,7 +35,7 @@ def _load_scenarios() -> dict[str, dict]:
             "title": post["title"],
             "title_en": post["title_en"],
             "description": post["description"],
-            "system_prompt": post.content,
+            "system_prompt": f"{post.content.strip()}\n\n{CONVERSATION_STYLE}",
             "opening_prompt": post["opening_prompt"],
             # Metadata (available for filtering/display)
             "language": post.get("language", "de"),
