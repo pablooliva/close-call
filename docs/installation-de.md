@@ -5,9 +5,11 @@ Close Call ist ein Trainingsprogramm für Verkaufsgespräche: Du wählst ein Sze
 ## Was du brauchst
 
 - **Mac mit Apple-Chip** (M1 oder neuer) **oder Windows-PC** (Windows 10/11, 64 Bit)
-- Ein **Headset** (empfohlen) oder Mikrofon und Lautsprecher
+- Ein **Headset** – das ist Pflicht (siehe unten)
 - Eine **Internetverbindung**
 - Die **Installationsdatei** und deinen **Zugangsschlüssel** – beides bekommst du separat zugeschickt
+
+**Warum ein Headset?** Ohne Headset nimmt das Mikrofon die Stimme des KI-Kunden aus den Lautsprechern wieder auf. Er hört sich dann selbst und das Gespräch gerät durcheinander.
 
 Den Zugangsschlüssel bitte nicht weitergeben, er ist wie ein Passwort.
 
@@ -58,5 +60,6 @@ Close Call prüft den Schlüssel sofort. Stimmt er, geht es direkt zu den Szenar
 |---|---|
 | Der Kunde sagt nichts | Internetverbindung prüfen. Wurde ein neuer Zugangsschlüssel verschickt, auf der Startseite **Zugang ändern** wählen und ihn eintragen. |
 | Der Kunde hört mich nicht | Mikrofonzugriff erlauben: Mac unter *Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon*, Windows unter *Einstellungen → Datenschutz → Mikrofon*. Headset vor dem Start von Close Call anschließen. |
+| Der Kunde unterbricht sich oder antwortet auf sich selbst | Er hört seine eigene Stimme über die Lautsprecher. Headset verwenden und vor dem Start von Close Call anschließen. |
 | Neuer Zugangsschlüssel bekommen | Auf der Startseite **Zugang ändern** wählen, den neuen Schlüssel einfügen, **Prüfen und speichern**. |
 | Etwas anderes | Melde dich mit einer kurzen Beschreibung. Hilfreich ist die Protokolldatei: auf dem Mac `~/Library/Application Support/Close Call/logs/server.log` (Finder → *Gehe zu → Gehe zum Ordner …*), unter Windows `%APPDATA%\Close Call\logs\server.log` (in die Adresszeile des Explorers einfügen). |

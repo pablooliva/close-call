@@ -38,7 +38,7 @@ docker compose up --build
 
 For non-technical users: an installable Electron app with the Python server bundled inside. No Python, no terminal, no browser needed. On first start it asks for the Azure key (see [The Azure API Key](#the-azure-api-key-setup-page)). See [ADR 0001](SDD/adr/0001-electron-shell-with-python-sidecar.md) for why Electron.
 
-**Installers:** download `close-call-macOS` / `close-call-Windows` from the latest successful [Desktop build run](https://github.com/pablooliva/close-call/actions/workflows/desktop.yml) (needs a GitHub login; artifacts expire after 90 days) and share them internally. **For colleagues:** [German install guide](docs/installation-de.md) to send along with the installer and their key.
+**Installers:** download `close-call-macOS` / `close-call-Windows` from the latest successful [Desktop build run](https://github.com/pablooliva/close-call/actions/workflows/desktop.yml) (needs a GitHub login; artifacts expire after 90 days) and share them internally. **For colleagues:** German install guide ([Markdown](docs/installation-de.md), [PDF](docs/installation-de.pdf)) to send along with the installer and their key.
 
 Building yourself:
 

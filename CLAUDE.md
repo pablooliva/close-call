@@ -78,7 +78,7 @@ PROJECT.md (written 2026-04-04) and SPEC-001/SPEC-002 describe the original Gemi
 - Desktop-only markup goes between `<!-- desktop:start -->`/`<!-- desktop:end -->`, browser-only between `<!-- logout:start -->`/`<!-- logout:end -->`; `serve_page()` strips the other mode's blocks.
 - New Python modules imported dynamically must be added to `build_desktop.py` (`--collect-submodules`), or the packaged app fails at runtime while `uv run` works.
 - CI (`.github/workflows/desktop.yml`): pin `astral-sh/setup-uv` to an exact version (it publishes no `v10`-style tag) and keep `python-version: "3.13"` (runner default 3.15 has no `onnxruntime` wheels). Branch pushes build when app code changes; `workflow_dispatch` only works once the file is on `main`.
-- User-facing install steps live in `docs/installation-de.md` (German, *du*). Keep its button labels in sync with `static/*.html`.
+- User-facing install steps live in `docs/installation-de.md` (German, *du*) with a designed PDF export, `docs/installation-de.pdf`, that is distributed to colleagues. Keep the button labels in sync with `static/*.html`, and when the guide changes, tell the owner the PDF needs re-exporting (it is laid out by hand, not generated).
 
 ## Known Constraints
 
