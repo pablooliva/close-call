@@ -48,7 +48,9 @@ from pipecat.workers.runner import WorkerRunner
 from feedback import format_transcript, generate_feedback
 from scenarios import SCENARIOS
 
-load_dotenv(override=True)
+# In the desktop app, desktop.py loads the settings (template + user's .env)
+if os.environ.get("DESKTOP_MODE", "").lower() != "true":
+    load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 

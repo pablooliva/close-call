@@ -7,18 +7,13 @@ This produces a single-folder distribution in dist/closecall-server/ that the
 Electron app (electron/) bundles and starts. Must be run on each target
 platform: PyInstaller cannot cross-compile.
 
-A local .env is bundled when present (handy for builds you hand out yourself).
-CI builds have none: the repo is public, so its installers must not contain the
-Azure key; users put their .env in the app-data folder instead.
+No build ever contains a key: only the .env.example template is bundled, and
+users enter their key on the setup page at first start.
 """
-
-import os
 
 import PyInstaller.__main__
 
 # Console app (not --windowed): Electron hides the window and needs stdin.
-env_data = ["--add-data=.env:."] if os.path.exists(".env") else []
-
 PyInstaller.__main__.run([
     "desktop.py",
     "--name=closecall-server",
@@ -26,7 +21,7 @@ PyInstaller.__main__.run([
     # Bundle data directories
     "--add-data=static:static",
     "--add-data=scenarios:scenarios",
-    *env_data,
+    "--add-data=.env.example:.",
     # Hidden imports that PyInstaller may miss
     "--hidden-import=uvicorn.logging",
     "--hidden-import=uvicorn.loops",
@@ -43,6 +38,7 @@ PyInstaller.__main__.run([
     "--hidden-import=bot",
     "--hidden-import=scenarios",
     "--hidden-import=feedback",
+    "--hidden-import=desktop_env",
     "--hidden-import=certifi",
     "--hidden-import=dotenv",
     # Collect only the pipecat submodules we actually use (not all 50+ services)

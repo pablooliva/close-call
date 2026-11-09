@@ -13,5 +13,6 @@ dependencies = [
     "pyinstaller>=6.19.0",
     "requests>=2.33.1",
     "openai>=2.31.0",
+    "httpx>=0.28.1",
 ]
 

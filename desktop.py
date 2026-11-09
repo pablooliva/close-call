@@ -7,8 +7,8 @@ Auth is bypassed via DESKTOP_MODE.
 
 Environment set by Electron:
     PORT                  Free localhost port chosen by Electron.
-    CLOSECALL_ENV_FILE    Optional .env in the user's app-data folder; overrides
-                          the .env bundled at build time (CI builds bundle none).
+    CLOSECALL_ENV_FILE    The user's .env in the app-data folder, written by the
+                          setup page; overrides the bundled .env.example template.
     CLOSECALL_DATA_DIR    Writable folder for transcripts (the install folder
                           may be read-only, e.g. C:\\Program Files).
     CLOSECALL_SIDECAR=1   Exit when stdin closes, so the server never outlives
@@ -51,26 +51,17 @@ def main():
     # Set desktop mode so server skips auth
     os.environ["DESKTOP_MODE"] = "true"
 
-    # Load .env: bundled inside the app first, then the user's file (override)
-    from dotenv import load_dotenv
-    bundle_dir = get_bundle_dir()
-
-    bundled_env = os.path.join(bundle_dir, ".env")
-    if os.path.exists(bundled_env):
-        load_dotenv(bundled_env, override=True)
-
-    user_env = os.environ.get("CLOSECALL_ENV_FILE", "")
-    if user_env and os.path.exists(user_env):
-        load_dotenv(user_env, override=True)
-
-    if not os.environ.get("AZURE_OPENAI_API_KEY"):
-        logger.error("AZURE_OPENAI_API_KEY is not set — calls will fail. Expected .env at %s", user_env or bundled_env)
-
     if os.environ.get("CLOSECALL_SIDECAR") == "1":
         threading.Thread(target=exit_when_stdin_closes, daemon=True).start()
 
-    # Change to bundle dir so static file and scenario paths resolve correctly
-    os.chdir(bundle_dir)
+    # Change to bundle dir so static files, scenarios and the template resolve
+    os.chdir(get_bundle_dir())
+
+    # Settings: the .env.example template, then the user's .env on top
+    import desktop_env
+    desktop_env.load()
+    if not os.environ.get("AZURE_OPENAI_API_KEY"):
+        logger.info("No API key yet — the app shows the setup page")
 
     port = int(os.environ.get("PORT", "7860"))
 

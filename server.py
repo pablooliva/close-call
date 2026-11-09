@@ -30,6 +30,7 @@ import re
 import secrets
 import time
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Cookie, FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -42,10 +43,13 @@ from pipecat.transports.smallwebrtc.request_handler import (
     SmallWebRTCRequestHandler,
 )
 
+import desktop_env
 from bot import run_bot
 from scenarios import SCENARIOS, get_scenario_list
 
-load_dotenv(override=True)
+# In the desktop app, desktop.py loads the settings (template + user's .env)
+if os.environ.get("DESKTOP_MODE", "").lower() != "true":
+    load_dotenv(override=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -244,14 +248,20 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 LOGOUT_BLOCK = re.compile(r"<!-- logout:start.*?<!-- logout:end -->\n?", re.S)
+DESKTOP_BLOCK = re.compile(r"<!-- desktop:start.*?<!-- desktop:end -->\n?", re.S)
 
 
 def serve_page(path: str):
-    """Serve a static page. The desktop app has no login, so drop its logout button."""
-    if not DESKTOP_MODE:
-        return FileResponse(path)
+    """Serve a static page without the other mode's parts: the desktop app has no
+    login (no logout button), the browser version has no setup page link."""
     with open(path, encoding="utf-8") as f:
-        return HTMLResponse(LOGOUT_BLOCK.sub("", f.read()))
+        html = f.read()
+    return HTMLResponse((LOGOUT_BLOCK if DESKTOP_MODE else DESKTOP_BLOCK).sub("", html))
+
+
+def needs_setup() -> bool:
+    """Desktop app without a key yet: send the user to the setup page."""
+    return DESKTOP_MODE and not os.environ.get("AZURE_OPENAI_API_KEY")
 
 
 @app.get("/login")
@@ -267,6 +277,8 @@ async def index(session: str | None = Cookie(default=None)):
     """Serve landing page (requires auth)."""
     if not is_authenticated(session):
         return RedirectResponse(url="/login")
+    if needs_setup():
+        return RedirectResponse(url="/setup")
     return serve_page("static/landing.html")
 
 
@@ -275,7 +287,55 @@ async def call_page(session: str | None = Cookie(default=None)):
     """Serve the call/scenario selection page (requires auth)."""
     if not is_authenticated(session):
         return RedirectResponse(url="/login")
+    if needs_setup():
+        return RedirectResponse(url="/setup")
     return serve_page("static/index.html")
+
+
+# --- Desktop Setup (first start: ask for the Azure key) ---
+
+class SetupRequest(BaseModel):
+    api_key: str
+
+
+@app.get("/setup")
+async def setup_page():
+    """Serve the key setup page (desktop app only)."""
+    if not DESKTOP_MODE:
+        raise HTTPException(status_code=404)
+    return serve_page("static/setup.html")
+
+
+@app.post("/api/setup")
+async def setup(body: SetupRequest):
+    """Check the key against Azure, then save it to the user's settings."""
+    if not DESKTOP_MODE:
+        raise HTTPException(status_code=404)
+    api_key = body.api_key.strip()
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="Bitte den Zugangsschlüssel einfügen.")
+    if not endpoint:
+        raise HTTPException(status_code=500, detail="Kein Azure-Endpunkt konfiguriert.")
+
+    # Cheapest authenticated call: list deployments (401 for a wrong key)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            res = await client.get(
+                f"{endpoint}/openai/deployments",
+                params={"api-version": "2022-12-01"},
+                headers={"api-key": api_key},
+            )
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail="Azure ist nicht erreichbar. Bitte Internetverbindung prüfen.")
+    if res.status_code in (401, 403):
+        raise HTTPException(status_code=400, detail="Der Schlüssel wurde nicht akzeptiert. Bitte prüfen und erneut einfügen.")
+    if res.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Azure hat unerwartet geantwortet (Status {res.status_code}).")
+
+    desktop_env.save_api_key(api_key)
+    logger.info("Setup: API key saved")
+    return {"ok": True}
 
 
 # --- Entry Point ---

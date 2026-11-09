@@ -18,7 +18,7 @@ A PoC voice agent that lets Memodo salespeople practice German-language solar sa
 ## How to Run
 
 ```bash
-cp .env.example .env   # Add AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY
+cp .env.example .env   # Add AZURE_OPENAI_API_KEY (endpoint is preset)
 uv sync                # Install dependencies from pyproject.toml
 uv run python server.py  # Starts on http://localhost:7860
 ```
@@ -48,6 +48,8 @@ Dependencies are defined in `pyproject.toml`, not `requirements.txt`. The `requi
 | `feedback.py` | Post-call coaching generation via Azure OpenAI text API |
 | `static/index.html` | Single-page frontend (scenario picker, call UI, feedback display) |
 | `desktop.py` | Headless server entry for the desktop app (the Electron "sidecar") |
+| `desktop_env.py` | Desktop settings: `.env.example` template + user's `.env`, saving the key from the setup page |
+| `static/setup.html` | Desktop first-run page (*Zugang einrichten*): paste, check and save the Azure key |
 | `build_desktop.py` | PyInstaller build of the sidecar |
 | `electron/main.js` | Electron shell: starts the sidecar on a free port, shows the frontend, stops it on quit |
 
@@ -71,7 +73,9 @@ PROJECT.md (written 2026-04-04) and SPEC-001/SPEC-002 describe the original Gemi
 
 - The sidecar gets its config from Electron via env: `PORT`, `CLOSECALL_ENV_FILE` (user's `.env` in app data), `CLOSECALL_DATA_DIR` (writable folder; the install dir may be read-only), `CLOSECALL_SIDECAR=1` (exit when stdin closes, so the server never outlives a crashed app). Keep the sidecar a console build (not `--windowed`): windowed Windows builds have no stdin.
 - macOS builds are ad-hoc signed (`mac.identity: "-"`, `hardenedRuntime: false`). Without it the bundle keeps Electron's stale signature and Gatekeeper calls downloaded copies "damaged" with no override. Switch to a real identity + hardened runtime + notarization once a certificate exists.
-- **Never bundle a `.env` in CI builds.** The repo is public and workflow artifacts are downloadable; `build_desktop.py` only bundles `.env` when one exists locally.
+- **No build contains a key.** Only `.env.example` is bundled (AZURE_* lines used as defaults: endpoint, deployments). Users enter the key on `/setup` (`POST /api/setup` checks it against Azure, `desktop_env.save_api_key` writes the app-data `.env`, mode 600). The repo is public, so never bundle a `.env`.
+- In desktop mode only `desktop_env.load()` reads settings; `server.py`/`bot.py` skip their own `load_dotenv(override=True)`, which would otherwise override the user's file. Never take `USERNAME`/`PASSWORD` from the template: `USERNAME` would shadow the Windows variable.
+- Desktop-only markup goes between `<!-- desktop:start -->`/`<!-- desktop:end -->`, browser-only between `<!-- logout:start -->`/`<!-- logout:end -->`; `serve_page()` strips the other mode's blocks.
 - New Python modules imported dynamically must be added to `build_desktop.py` (`--collect-submodules`), or the packaged app fails at runtime while `uv run` works.
 
 ## Known Constraints

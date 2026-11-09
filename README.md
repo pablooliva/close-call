@@ -17,7 +17,7 @@ cd close-call
 
 # 2. Set up Azure credentials
 cp .env.example .env
-# Edit .env: AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY (see Requirements)
+# Edit .env: add AZURE_OPENAI_API_KEY (the endpoint is already set)
 
 # 3. Install and run
 uv sync
@@ -186,16 +186,15 @@ Output files per session (in transcripts/):
 cd electron && npm ci && npm start      # runs desktop.py from source via uv
 ```
 
-### The Azure API Key
+### The Azure API Key (setup page)
 
-The app reads its `.env` from two places (the second wins):
+No installer contains a key. On first start the app shows **Zugang einrichten**: the user pastes the key they received separately, the app checks it against Azure and saves it. Later starts go straight to the scenarios; **Zugang ändern** on the start page enters a new key (e.g. after you rotate it).
 
-1. A `.env` bundled at build time -- only if one exists in the repo root when you run `build_desktop.py`. Handy for builds you hand out yourself.
-2. A `.env` in the user's app-data folder:
-   - macOS: `~/Library/Application Support/Close Call/.env`
-   - Windows: `%APPDATA%\Close Call\.env`
-
-**Installers built by GitHub Actions contain no key** (the repo is public and workflow artifacts are downloadable), so their users need option 2. Either way, every installed copy holds the key -- treat it as shared with every user.
+- The endpoint and deployment names come from `.env.example`, which is bundled as a template. Only the key is user input.
+- The key is stored in the user's app-data folder, readable only by their account:
+  - macOS: `~/Library/Application Support/Close Call/.env` (Finder: *Go > Go to Folder…*, then ⇧⌘. to show the hidden file)
+  - Windows: `%APPDATA%\Close Call\.env`
+- To give a colleague access, send them the installer and the key through a private channel (e.g. a direct Teams message). Every installed copy holds the key, so rotate it when someone leaves: hand out *Key 2*, then regenerate *Key 1*.
 
 ### Where Data Goes
 
