@@ -7,7 +7,7 @@ A PoC voice agent that lets Memodo salespeople practice German-language solar sa
 ## Stack
 
 - **Framework:** Pipecat v1.14.0 (pinned)
-- **Voice AI:** Azure OpenAI `gpt-realtime-2.1` via `AzureRealtimeLLMService` (Data Zone Standard EU deployment, Sweden Central)
+- **Voice AI:** Azure OpenAI `gpt-realtime-2.1` via `AzureRealtimeLLMService`, on the dedicated resource `memodo-closecall-sweden` (Sweden Central). Currently a **Global Standard** deployment for the evaluation; must become Data Zone Standard before rollout (see Known Constraints)
 - **User transcription:** in-session via `gpt-4o-transcribe` (salesperson turns land in the context as `user` messages)
 - **Transport:** WebRTC via `SmallWebRTCTransport` (STUN-only, localhost)
 - **Server:** FastAPI + uvicorn (single worker)
@@ -77,10 +77,12 @@ PROJECT.md (written 2026-04-04) and SPEC-001/SPEC-002 describe the original Gemi
 - In desktop mode only `desktop_env.load()` reads settings; `server.py`/`bot.py` skip their own `load_dotenv(override=True)`, which would otherwise override the user's file. Never take `USERNAME`/`PASSWORD` from the template: `USERNAME` would shadow the Windows variable.
 - Desktop-only markup goes between `<!-- desktop:start -->`/`<!-- desktop:end -->`, browser-only between `<!-- logout:start -->`/`<!-- logout:end -->`; `serve_page()` strips the other mode's blocks.
 - New Python modules imported dynamically must be added to `build_desktop.py` (`--collect-submodules`), or the packaged app fails at runtime while `uv run` works.
+- CI (`.github/workflows/desktop.yml`): pin `astral-sh/setup-uv` to an exact version (it publishes no `v10`-style tag) and keep `python-version: "3.13"` (runner default 3.15 has no `onnxruntime` wheels). Branch pushes build when app code changes; `workflow_dispatch` only works once the file is on `main`.
+- User-facing install steps live in `docs/installation-de.md` (German, *du*). Keep its button labels in sync with `static/*.html`.
 
 ## Known Constraints
 
 - **Single uvicorn worker only.** Feedback delivery uses a module-level dict. Multiple workers break feedback silently.
 - **Localhost only.** No HTTPS, no TURN server, no auth. STUN-only WebRTC.
 - **No persistence.** All data is in-memory per session.
-- **EU processing only.** Azure deployments must be Data Zone Standard (EU). `gpt-realtime-2.1-mini` and `gpt-realtime-2` are Global-only — don't switch to them without revisiting GDPR.
+- **EU processing only.** Azure deployments must be Data Zone Standard (EU). `gpt-realtime-2.1-mini` and `gpt-realtime-2` are Global-only — don't switch to them without revisiting GDPR. **Temporary exception:** `gpt-realtime-2.1` runs as Global Standard during the evaluation (owner's decision; testers told not to use real customer data).

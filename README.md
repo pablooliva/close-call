@@ -12,7 +12,7 @@ https://github.com/user-attachments/assets/21a24a02-5263-43e4-97f7-b383d9680bac
 
 ```bash
 # 1. Clone and enter
-git clone https://github.com/your-org/close-call.git
+git clone https://github.com/pablooliva/close-call.git
 cd close-call
 
 # 2. Set up Azure credentials
@@ -36,7 +36,11 @@ docker compose up --build
 
 ## Desktop App (Windows + macOS)
 
-For non-technical users: an installable Electron app with the Python server bundled inside. No Python, no terminal, no browser needed. See [ADR 0001](SDD/adr/0001-electron-shell-with-python-sidecar.md) for why Electron.
+For non-technical users: an installable Electron app with the Python server bundled inside. No Python, no terminal, no browser needed. On first start it asks for the Azure key (see [The Azure API Key](#the-azure-api-key-setup-page)). See [ADR 0001](SDD/adr/0001-electron-shell-with-python-sidecar.md) for why Electron.
+
+**Installers:** download `close-call-macOS` / `close-call-Windows` from the latest successful [Desktop build run](https://github.com/pablooliva/close-call/actions/workflows/desktop.yml) (needs a GitHub login; artifacts expire after 90 days) and share them internally. **For colleagues:** [German install guide](docs/installation-de.md) to send along with the installer and their key.
+
+Building yourself:
 
 ```bash
 uv run python build_desktop.py          # 1. Python server -> dist/closecall-server/
@@ -44,7 +48,7 @@ cd electron && npm ci                   # 2. Electron + electron-builder (once)
 npx electron-builder --publish never    # 3. Installer -> electron/dist/
 ```
 
-Builds must run on the target platform (a Mac builds the DMG, Windows builds the `.exe` installer). The **Desktop build** GitHub Actions workflow builds both; run it manually or push a `v*` tag.
+Builds must run on the target platform (a Mac builds the DMG, Windows builds the `.exe` installer). The **Desktop build** GitHub Actions workflow builds both, on macOS and Windows runners: automatically on every push that changes app code (`*.py`, `static/`, `scenarios/`, `electron/`, dependencies), on `v*` tags, and manually via *Run workflow*. It never has access to a key.
 
 See [Desktop App Details](#desktop-app-details) below for the API key, distribution and platform notes.
 
@@ -100,6 +104,10 @@ Estimates based on OpenAI's list prices for `gpt-realtime-2.1` (~$0.06-0.11 per 
 |    1. Validate scenario_id                                            |
 |    2. SmallWebRTCRequestHandler.handle_web_request() --> SDP answer   |
 |    3. BackgroundTasks.add_task(run_bot, connection, scenario, store)  |
+|                                                                       |
+|  Desktop app only (DESKTOP_MODE):                                     |
+|    GET /setup, POST /api/setup -- check key against Azure, save it    |
+|    to the user's .env (desktop_env.py); / redirects there if no key   |
 |                                                                       |
 +----------------------------------+------------------------------------+
                                    |
@@ -167,7 +175,8 @@ Estimates based on OpenAI's list prices for `gpt-realtime-2.1` (~$0.06-0.11 per 
 |                                                                       |
 +-----------------------------------------------------------------------+
 
-Output files per session (in transcripts/):
+Output files per session (in transcripts/ -- next to server.py, or in the
+desktop app's app-data folder, see "Where Data Goes" below):
   <timestamp>_<scenario>.log             -- raw dialogue log (audio stats, [USER], [BOT])
   <timestamp>_<scenario>.wav             -- stereo recording (both sides)
   <timestamp>_<scenario>.transcript.txt  -- interleaved text transcript
@@ -216,10 +225,13 @@ The microphone permission is requested on first start (macOS) or first call.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11-3.14 (3.13 recommended; builds use it). Python 3.15 does not work yet: `onnxruntime`, a Pipecat dependency, has no 3.15 wheels.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) package manager
-- An Azure Foundry resource in an EU region (e.g. Sweden Central) with these Data Zone Standard deployments:
+- Node.js 22 (only to build or develop the desktop app)
+- An Azure Foundry resource in an EU region with these deployments. Close Call uses its own resource, `memodo-closecall-sweden` (Sweden Central), so its keys can be rotated without affecting anything else:
   - `gpt-realtime-2.1` -- the live customer
   - `gpt-5.6-terra` -- coaching feedback (`gpt-5.4` also works)
   - `gpt-4o-transcribe` -- in-session transcription of the salesperson
-- A browser with microphone access (for the web version)
+
+  Deploy them as **Data Zone Standard** so audio is processed only in the EU. *Current exception:* during the evaluation, `gpt-realtime-2.1` runs as Global Standard (Data Zone quota pending); switch it before wider rollout. The app only needs the deployment names to match.
+- A browser with microphone access (when running `server.py` directly)
