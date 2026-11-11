@@ -41,6 +41,8 @@ def wait_for_setup_page(proc: subprocess.Popen, port: int) -> str | None:
 
 
 def main() -> int:
+    # Windows consoles default to cp1252, which can't print Pipecat's log banner
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     server_dir = os.path.abspath(sys.argv[1])
     exe = os.path.join(server_dir, "closecall-server.exe" if os.name == "nt" else "closecall-server")
     data_dir = tempfile.mkdtemp(prefix="closecall-smoke-")
