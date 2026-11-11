@@ -32,7 +32,7 @@ Den Zugangsschlüssel bitte nicht weitergeben, er ist wie ein Passwort.
 1. Entpacke die zugeschickte Zip-Datei (Rechtsklick → **Alle extrahieren**).
 2. Starte **Close Call Setup** mit einem Doppelklick. Administratorrechte sind nicht nötig.
 3. Erscheint *„Der Computer wurde durch Windows geschützt"*: Klicke auf **Weitere Informationen** und dann auf **Trotzdem ausführen**.
-4. Close Call wird installiert und startet danach automatisch. Später findest du es im Startmenü.
+4. Close Call wird installiert und startet danach automatisch. Später findest du es im Startmenü. Der allererste Start kann einige Minuten dauern, weil Windows die Dateien prüft – bitte warten.
 5. Wenn nach dem Mikrofon gefragt wird: **Zulassen**.
 
 Lässt dein Firmenrechner die Installation gar nicht zu, melde dich bitte – dann muss die IT freischalten.
@@ -61,5 +61,7 @@ Close Call prüft den Schlüssel sofort. Stimmt er, geht es direkt zu den Szenar
 | Der Kunde sagt nichts | Internetverbindung prüfen. Wurde ein neuer Zugangsschlüssel verschickt, auf der Startseite **Zugang ändern** wählen und ihn eintragen. |
 | Der Kunde hört mich nicht | Mikrofonzugriff erlauben: Mac unter *Systemeinstellungen → Datenschutz & Sicherheit → Mikrofon*, Windows unter *Einstellungen → Datenschutz → Mikrofon*. Headset vor dem Start von Close Call anschließen. |
 | Der Kunde unterbricht sich oder antwortet auf sich selbst | Er hört seine eigene Stimme über die Lautsprecher. Headset verwenden und vor dem Start von Close Call anschließen. |
+| Meldung „Die Serverdatei fehlt“ oder „Der Start des Servers wurde blockiert“ | Der Virenschutz hat einen Teil von Close Call blockiert. Bitte melde dich – die IT muss Close Call freigeben. Unter Windows siehst du den Eintrag unter *Windows-Sicherheit → Viren- & Bedrohungsschutz → Schutzverlauf*. |
+| Meldung „Der Server hat nach 3 Minuten noch nicht geantwortet“ | Close Call einfach noch einmal starten – der erste Start dauert auf manchen Rechnern sehr lange. Klappt es wieder nicht, melde dich mit der Protokolldatei (siehe unten). |
 | Neuer Zugangsschlüssel bekommen | Auf der Startseite **Zugang ändern** wählen, den neuen Schlüssel einfügen, **Prüfen und speichern**. |
 | Etwas anderes | Melde dich mit einer kurzen Beschreibung. Hilfreich ist die Protokolldatei: auf dem Mac `~/Library/Application Support/Close Call/logs/server.log` (Finder → *Gehe zu → Gehe zum Ordner …*), unter Windows `%APPDATA%\Close Call\logs\server.log` (in die Adresszeile des Explorers einfügen). |

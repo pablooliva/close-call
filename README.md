@@ -218,6 +218,18 @@ The builds are not code-signed yet.
 
 The microphone permission is requested on first start (macOS) or first call.
 
+### Troubleshooting Startup
+
+The app starts the server and waits up to 3 minutes for it (the first start on a company laptop can be slow while antivirus scans the ~460 MB of files). It reports:
+
+- **"Die Serverdatei fehlt" / "…wurde blockiert" (ENOENT / EACCES / EPERM):** the server executable was removed or blocked, typically by antivirus quarantining the unsigned PyInstaller build. Check the antivirus history; IT needs to allow Close Call (code signing reduces these false positives).
+- **"…nach 3 Minuten noch nicht geantwortet":** the server runs but is still loading. Try again; if it persists, check the log.
+- **"…unerwartet beendet":** the server crashed; the log has the traceback.
+
+The log (`logs/server.log` in the app-data folder) starts with a line written by the app itself (`starting …`), then the server's own lines (`Server process started`, `App loaded in …s`). Only the app's line means the server never ran.
+
+The **Desktop build** workflow runs `scripts/smoke_test_sidecar.py` on both runners: it starts the built server like the app does and fails the build unless a fresh install is redirected to the setup page within 3 minutes. If CI passes but a laptop fails, look at that machine's security software rather than the build.
+
 ### Platform Notes
 
 - Mac builds target the build machine's architecture (Apple Silicon on GitHub's `macos-latest`). Intel Macs need a separate build on an Intel machine.

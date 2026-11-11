@@ -22,6 +22,7 @@ import logging
 import os
 import sys
 import threading
+import time
 
 import uvicorn
 
@@ -48,6 +49,9 @@ def exit_when_stdin_closes():
 
 
 def main():
+    started = time.monotonic()
+    logger.info("Server process started (Python %s, %s)", sys.version.split()[0], sys.platform)
+
     # Set desktop mode so server skips auth
     os.environ["DESKTOP_MODE"] = "true"
 
@@ -67,6 +71,7 @@ def main():
 
     # Import app after env is loaded and cwd is set
     from server import app
+    logger.info("App loaded in %.1fs", time.monotonic() - started)
 
     logger.info("Starting Close Call server on port %d ...", port)
     uvicorn.run(app, host="127.0.0.1", port=port, workers=1, log_level="info")

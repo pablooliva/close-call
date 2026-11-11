@@ -18,6 +18,9 @@ PyInstaller.__main__.run([
     "desktop.py",
     "--name=closecall-server",
     "--noconfirm",                   # Overwrite previous build without asking
+    # UTF-8 mode baked in: frozen apps ignore PYTHONUTF8, and Windows would
+    # otherwise write logs in its legacy code page
+    "--python-option=X utf8",
     # Bundle data directories
     "--add-data=static:static",
     "--add-data=scenarios:scenarios",

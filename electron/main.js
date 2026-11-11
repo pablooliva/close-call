@@ -11,7 +11,8 @@ const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 
-const STARTUP_TIMEOUT_MS = 60_000;
+// Generous: on first start, antivirus software may scan every file of the server
+const STARTUP_TIMEOUT_MS = 180_000;
 
 let server = null;
 let quitting = false;
@@ -20,7 +21,9 @@ const LOADING_PAGE =
   "data:text/html;charset=utf-8," +
   encodeURIComponent(
     '<body style="font-family:system-ui;display:flex;align-items:center;justify-content:center;height:90vh;color:#555">' +
-      "Close Call wird gestartet …</body>",
+      "<div style=\"text-align:center\">Close Call wird gestartet …" +
+      '<div style="font-size:0.85em;margin-top:0.6em;color:#888">Der erste Start kann einige Minuten dauern.</div>' +
+      "</div></body>",
   );
 
 function freePort() {
@@ -44,12 +47,37 @@ function serverCommand() {
   return { command: "uv", args: ["run", "python", "desktop.py"], cwd: path.join(__dirname, "..") };
 }
 
+function logPath() {
+  return path.join(app.getPath("userData"), "logs", "server.log");
+}
+
+// Show the error once, name the log file, and quit (which stops the server)
+function fail(message) {
+  if (quitting) return;
+  quitting = true;
+  dialog.showErrorBox("Close Call", `${message}\n\nLog: ${logPath()}`);
+  app.quit();
+}
+
+function startFailureMessage(err, command) {
+  if (err.code === "ENOENT") {
+    return `Die Serverdatei fehlt:\n${command}\n\nMöglicherweise hat der Virenschutz sie entfernt (Schutzverlauf prüfen).`;
+  }
+  if (err.code === "EACCES" || err.code === "EPERM") {
+    return `Der Start des Servers wurde blockiert (${err.code}), möglicherweise durch Virenschutz oder eine IT-Richtlinie.`;
+  }
+  return `Der Server konnte nicht gestartet werden: ${err.message}`;
+}
+
 function startServer(port) {
   const userData = app.getPath("userData");
-  fs.mkdirSync(path.join(userData, "logs"), { recursive: true });
-  const log = fs.openSync(path.join(userData, "logs", "server.log"), "a");
+  fs.mkdirSync(path.dirname(logPath()), { recursive: true });
+  const log = fs.openSync(logPath(), "a");
+  const note = (text) => fs.writeSync(log, `[${new Date().toISOString()}] ${text}\n`);
 
   const { command, args, cwd } = serverCommand();
+  // Written by the app itself, so the log is never empty even if the server never runs
+  note(`Close Call ${app.getVersion()} (${process.platform}): starting ${command}`);
   server = spawn(command, args, {
     cwd,
     env: {
@@ -63,15 +91,17 @@ function startServer(port) {
     windowsHide: true,
   });
 
-  server.on("exit", (code) => {
+  // Spawning itself failed: missing file, or blocked by antivirus / IT policy
+  server.on("error", (err) => {
+    note(`Could not start server: ${err.code || ""} ${err.message}`);
     server = null;
-    if (!quitting) {
-      dialog.showErrorBox(
-        "Close Call",
-        `Der Server wurde unerwartet beendet (Code ${code}).\n\nLog: ${path.join(userData, "logs", "server.log")}`,
-      );
-      app.quit();
-    }
+    fail(startFailureMessage(err, command));
+  });
+
+  server.on("exit", (code, signal) => {
+    note(`Server exited (code ${code}, signal ${signal})`);
+    server = null;
+    fail(`Der Server wurde unerwartet beendet (Code ${code}).`);
   });
 }
 
@@ -133,8 +163,7 @@ async function createWindow() {
   if (await waitForServer(`${origin}/`)) {
     win.loadURL(`${origin}/`);
   } else if (server) {
-    dialog.showErrorBox("Close Call", "Der Server ist nicht rechtzeitig gestartet.");
-    app.quit();
+    fail(`Der Server hat nach ${STARTUP_TIMEOUT_MS / 60_000} Minuten noch nicht geantwortet.`);
   }
 }
 
