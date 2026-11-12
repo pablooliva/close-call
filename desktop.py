@@ -18,6 +18,7 @@ Run with: uv run python desktop.py
 Build with: uv run python build_desktop.py
 """
 
+import faulthandler
 import logging
 import os
 import sys
@@ -28,6 +29,8 @@ import uvicorn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+STALL_DUMP_SECONDS = 20
 
 
 def get_bundle_dir():
@@ -52,6 +55,12 @@ def main():
     started = time.monotonic()
     logger.info("Server process started (Python %s, %s)", sys.version.split()[0], sys.platform)
 
+    # Startup diagnostics: if loading the app stalls (seen on a Windows PC),
+    # write every thread's stack to the log every 20 s until it finishes, and
+    # dump the stack on a native crash. Electron sends stderr to server.log.
+    faulthandler.enable(file=sys.stderr)
+    faulthandler.dump_traceback_later(STALL_DUMP_SECONDS, repeat=True, file=sys.stderr)
+
     # Set desktop mode so server skips auth
     os.environ["DESKTOP_MODE"] = "true"
 
@@ -70,7 +79,9 @@ def main():
     port = int(os.environ.get("PORT", "7860"))
 
     # Import app after env is loaded and cwd is set
+    logger.info("Loading app ...")
     from server import app
+    faulthandler.cancel_dump_traceback_later()
     logger.info("App loaded in %.1fs", time.monotonic() - started)
 
     logger.info("Starting Close Call server on port %d ...", port)
