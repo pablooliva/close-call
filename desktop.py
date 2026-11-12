@@ -25,6 +25,11 @@ import sys
 import threading
 import time
 
+# One OpenBLAS thread: on a Windows PC, loading numpy hung forever while
+# OpenBLAS started its thread pool. We only touch small audio buffers, so
+# multithreaded maths gains nothing. Must be set before numpy is imported.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
 import uvicorn
 
 logging.basicConfig(level=logging.INFO)
